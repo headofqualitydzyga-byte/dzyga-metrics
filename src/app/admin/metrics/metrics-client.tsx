@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { MetricDefinition, MetricType, ValueType } from "@/types/database";
@@ -333,9 +333,8 @@ export default function MetricsClient({
           </thead>
           <tbody>
             {filtered.map((m) => (
-              <>
+              <Fragment key={m.id}>
                 <tr
-                  key={m.id}
                   className={`border-b border-border last:border-0 hover:bg-page ${
                     !m.is_active ? "opacity-50" : ""
                   }`}
@@ -390,7 +389,7 @@ export default function MetricsClient({
                   </td>
                 </tr>
                 {editId === m.id && (
-                  <tr key={`edit-${m.id}`} className="border-b border-border bg-page">
+                  <tr className="border-b border-border bg-page">
                     <td colSpan={6} className="px-4 py-4">
                       <MetricForm
                         initial={m}
@@ -401,7 +400,7 @@ export default function MetricsClient({
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>

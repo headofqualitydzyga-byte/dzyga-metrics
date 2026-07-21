@@ -5,12 +5,12 @@ import { sendInvitationEmail } from "@/lib/email/mailer";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
-  try {
-    const { profile } = await requireProfile();
-    if (!canManageAdmin(profile.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const { profile } = await requireProfile();
+  if (!canManageAdmin(profile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
+  try {
     const body = await req.json();
     const { email, role, department_id } = body as {
       email: string;

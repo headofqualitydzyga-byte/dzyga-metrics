@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Department } from "@/types/database";
@@ -196,8 +196,8 @@ export default function DepartmentsClient({
           </thead>
           <tbody>
             {departments.map((dept) => (
-              <>
-                <tr key={dept.id} className="border-b border-border last:border-0 hover:bg-page">
+              <Fragment key={dept.id}>
+                <tr className="border-b border-border last:border-0 hover:bg-page">
                   <td className="px-4 py-3 font-medium text-ink">{dept.name}</td>
                   <td className="px-4 py-3">
                     <span
@@ -227,7 +227,7 @@ export default function DepartmentsClient({
                   </td>
                 </tr>
                 {editId === dept.id && (
-                  <tr key={`edit-${dept.id}`} className="border-b border-border bg-page">
+                  <tr className="border-b border-border bg-page">
                     <td colSpan={5} className="px-4 py-4">
                       <DeptForm
                         initial={dept}
@@ -237,7 +237,7 @@ export default function DepartmentsClient({
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>

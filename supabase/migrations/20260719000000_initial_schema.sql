@@ -26,17 +26,6 @@ create policy "departments: authenticated read"
   to authenticated
   using (true);
 
--- Only admins can mutate
-create policy "departments: admin write"
-  on departments for all
-  to authenticated
-  using (
-    exists (
-      select 1 from profiles
-      where profiles.id = auth.uid() and profiles.role = 'admin'
-    )
-  );
-
 -- ============================================================
 -- PROFILES
 -- ============================================================
@@ -74,6 +63,17 @@ create policy "profiles: admin write"
     exists (
       select 1 from profiles p
       where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+-- Only admins can mutate departments (added here because it references profiles)
+create policy "departments: admin write"
+  on departments for all
+  to authenticated
+  using (
+    exists (
+      select 1 from profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
     )
   );
 

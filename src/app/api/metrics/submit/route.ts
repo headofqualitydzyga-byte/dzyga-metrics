@@ -5,8 +5,8 @@ import { calcStatus } from "@/lib/metrics/status";
 import type { MetricDefinition } from "@/types/database";
 
 export async function POST(req: NextRequest) {
+  const { profile } = await requireProfile();
   try {
-    const { profile } = await requireProfile();
     const body = await req.json();
     const { entries } = body as {
       entries: Array<{

@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import ExcelJS from "exceljs";
-import { calcStatus, formatDeviation } from "@/lib/metrics/status";
+import {
+  calcStatus,
+  formatDeviation,
+  formatWeekStart,
+  getCurrentWeekStart,
+} from "@/lib/metrics/status";
 import type { MetricDefinition, MetricSubmission, Department } from "@/types/database";
 
 export async function GET(req: NextRequest) {
   const { profile } = await requireProfile();
   const { searchParams } = new URL(req.url);
   const deptId = searchParams.get("department");
-  const weekStart = searchParams.get("week") ?? new Date().toISOString().split("T")[0];
+  const weekStart = searchParams.get("week") ?? formatWeekStart(getCurrentWeekStart());
 
   const supabase = await createClient();
 

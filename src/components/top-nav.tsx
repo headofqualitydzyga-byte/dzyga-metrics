@@ -4,26 +4,23 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { ROLE_LABELS } from "@/lib/roles";
 import type { UserRole } from "@/types/database";
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "Адмін",
-  manager: "Керівник",
-  viewer: "CEO",
-};
 
 interface NavLink {
   href: string;
   label: string;
 }
 
+const ADMIN_LINKS: NavLink[] = [
+  { href: "/admin/employees", label: "Співробітники" },
+  { href: "/admin/departments", label: "Відділи" },
+  { href: "/admin/metrics", label: "Метрики" },
+];
+
 function getLinks(role: UserRole): NavLink[] {
   const links: NavLink[] = [{ href: "/dashboard", label: "Дашборд" }];
-  if (role === "admin") {
-    links.push({ href: "/admin/employees", label: "Співробітники" });
-    links.push({ href: "/admin/departments", label: "Відділи" });
-    links.push({ href: "/admin/metrics", label: "Метрики" });
-  }
+  if (role === "admin") links.push(...ADMIN_LINKS);
   return links;
 }
 

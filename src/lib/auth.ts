@@ -21,7 +21,7 @@ export async function requireProfile(): Promise<{
     .eq("id", user.id)
     .single();
 
-  if (!profile) redirect("/login");
+  if (!profile) redirect("/api/auth/signout");
 
   return { user: user as User, profile: profile as Profile, email: user.email as string };
 }
