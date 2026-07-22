@@ -54,7 +54,6 @@ export async function GET(req: NextRequest) {
     { header: "Факт", key: "fact", width: 14 },
     { header: "Відхилення", key: "deviation", width: 18 },
     { header: "Статус", key: "status", width: 14 },
-    { header: "Коментар", key: "comment", width: 30 },
   ];
 
   // Style header
@@ -96,7 +95,6 @@ export async function GET(req: NextRequest) {
       fact: sub != null ? `${sub.value} ${def.unit}` : "—",
       deviation: sub != null ? formatDeviation(def, sub.value) : "—",
       status: statusLabels[status],
-      comment: sub?.comment ?? "",
     });
 
     // Color status cell

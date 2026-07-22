@@ -31,10 +31,6 @@ export function booleanKeyboard(metricId: string): InlineKeyboard {
     .text("❌ Ні", `bool:${metricId}:0`);
 }
 
-export function skipCommentKeyboard(): InlineKeyboard {
-  return new InlineKeyboard().text("Пропустити коментар", "skip_comment");
-}
-
 export function updateKeyboard(metricId: string): InlineKeyboard {
   return new InlineKeyboard()
     .text("Так, оновити", `update:${metricId}:yes`)

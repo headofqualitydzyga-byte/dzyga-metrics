@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
       entries: Array<{
         metric_definition_id: string;
         value: number;
-        comment?: string | null;
         week_start: string;
       }>;
     };
@@ -24,7 +23,6 @@ export async function POST(req: NextRequest) {
       metric_definition_id: e.metric_definition_id,
       week_start: e.week_start,
       value: e.value,
-      comment: e.comment ?? null,
       submitted_via: "web" as const,
     }));
 

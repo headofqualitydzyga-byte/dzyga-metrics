@@ -59,7 +59,6 @@ export default function DepartmentDashboard({
     metrics[0]?.id ?? null
   );
   const [submitValues, setSubmitValues] = useState<Record<string, string>>({});
-  const [submitComments, setSubmitComments] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   function handlePeriodChange(p: string) {
@@ -82,7 +81,6 @@ export default function DepartmentDashboard({
       .map(([metricId, value]) => ({
         metric_definition_id: metricId,
         value: parseFloat(value),
-        comment: submitComments[metricId] || null,
         week_start: weekStart,
       }));
 
@@ -324,18 +322,6 @@ export default function DepartmentDashboard({
                       className="rounded-lg border border-border bg-page px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                     />
                   )}
-                  <input
-                    type="text"
-                    placeholder="Коментар (необов'язково)"
-                    value={submitComments[def.id] ?? ""}
-                    onChange={(e) =>
-                      setSubmitComments((v) => ({
-                        ...v,
-                        [def.id]: e.target.value,
-                      }))
-                    }
-                    className="rounded-lg border border-border bg-page px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
-                  />
                 </div>
               );
             })}

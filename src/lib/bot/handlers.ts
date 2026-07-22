@@ -5,7 +5,6 @@ import {
   weekPickerKeyboard,
   confirmKeyboard,
   booleanKeyboard,
-  skipCommentKeyboard,
   updateKeyboard,
 } from "./keyboards";
 import type { MetricDefinition } from "@/types/database";
@@ -15,8 +14,6 @@ interface SubmitSession {
   metrics?: MetricDefinition[];
   currentIndex?: number;
   values?: Record<string, number>;
-  comments?: Record<string, string>;
-  awaitingComment?: boolean;
   awaitingUpdate?: string | null;
 }
 
@@ -158,7 +155,6 @@ export function createBot(token: string) {
 
     ctx.session.metrics = metrics;
     ctx.session.values = {};
-    ctx.session.comments = {};
     ctx.session.currentIndex = undefined;
 
     await ctx.reply(
@@ -184,20 +180,9 @@ export function createBot(token: string) {
     const [, metricId, valueStr] = ctx.match;
     const value = parseInt(valueStr);
     ctx.session.values = { ...(ctx.session.values ?? {}), [metricId]: value };
-    await ctx.answerCallbackQuery(value === 100 ? "✅ Записано: Так" : "❌ Записано: Ні");
-    ctx.session.awaitingComment = true;
-    await ctx.editMessageText(
-      `${value === 100 ? "✅ Так" : "❌ Ні"}\n\nДодати коментар?`,
-      { reply_markup: skipCommentKeyboard() }
-    );
-  });
-
-  // Skip comment callback
-  bot.callbackQuery("skip_comment", async (ctx) => {
-    ctx.session.awaitingComment = false;
     ctx.session.currentIndex = (ctx.session.currentIndex ?? 0) + 1;
-    await ctx.answerCallbackQuery();
-    await ctx.editMessageText("Пропущено");
+    await ctx.answerCallbackQuery(value === 100 ? "✅ Записано: Так" : "❌ Записано: Ні");
+    await ctx.editMessageText(value === 100 ? "✅ Так" : "❌ Ні");
     await askNextMetric(ctx);
   });
 
@@ -243,7 +228,6 @@ export function createBot(token: string) {
     if (!profile) return;
 
     const values = ctx.session.values ?? {};
-    const comments = ctx.session.comments ?? {};
     const metrics = ctx.session.metrics ?? [];
 
     const upserts = Object.entries(values).map(([metricId, value]) => ({
@@ -251,7 +235,6 @@ export function createBot(token: string) {
       metric_definition_id: metricId,
       week_start: weekStart,
       value,
-      comment: comments[metricId] ?? null,
       submitted_via: "telegram" as const,
     }));
 
@@ -318,24 +301,8 @@ export function createBot(token: string) {
     await ctx.editMessageText("❌ Введення скасовано");
   });
 
-  // Text message handler (for numeric/text input)
+  // Text message handler (for numeric input)
   bot.on("message:text", async (ctx) => {
-    if (ctx.session.awaitingComment) {
-      const metrics = ctx.session.metrics ?? [];
-      const idx = (ctx.session.currentIndex ?? 0);
-      const metric = metrics[idx];
-      if (metric) {
-        ctx.session.comments = {
-          ...(ctx.session.comments ?? {}),
-          [metric.id]: ctx.message.text,
-        };
-      }
-      ctx.session.awaitingComment = false;
-      ctx.session.currentIndex = idx + 1;
-      await askNextMetric(ctx);
-      return;
-    }
-
     // Awaiting update for existing metric
     if (ctx.session.awaitingUpdate) {
       const metricId = ctx.session.awaitingUpdate;
@@ -346,12 +313,10 @@ export function createBot(token: string) {
       }
       ctx.session.values = { ...(ctx.session.values ?? {}), [metricId]: value };
       ctx.session.awaitingUpdate = null;
-      ctx.session.awaitingComment = true;
       const metric = ctx.session.metrics?.find((m) => m.id === metricId);
-      await ctx.reply(
-        `Записано: ${value} ${metric?.unit}\n\nДодати коментар?`,
-        { reply_markup: skipCommentKeyboard() }
-      );
+      await ctx.reply(`Записано: ${value} ${metric?.unit}`);
+      ctx.session.currentIndex = (ctx.session.currentIndex ?? 0) + 1;
+      await askNextMetric(ctx);
       return;
     }
 
@@ -370,11 +335,9 @@ export function createBot(token: string) {
     }
 
     ctx.session.values = { ...(ctx.session.values ?? {}), [metric.id]: value };
-    ctx.session.awaitingComment = true;
-    await ctx.reply(
-      `Записано: ${value} ${metric.unit}\n\nДодати коментар?`,
-      { reply_markup: skipCommentKeyboard() }
-    );
+    await ctx.reply(`Записано: ${value} ${metric.unit}`);
+    ctx.session.currentIndex = idx + 1;
+    await askNextMetric(ctx);
   });
 
   return bot;
