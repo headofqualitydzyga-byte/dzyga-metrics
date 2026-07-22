@@ -4,6 +4,7 @@ import {
   getChartIcon,
   formatDeviation,
 } from "@/lib/metrics/status";
+import DeptIcon from "@/components/DeptIcon";
 import type { Department, MetricDefinition, MetricSubmission } from "@/types/database";
 
 const STATUS_DOT: Record<string, string> = {
@@ -58,9 +59,11 @@ export default function DepartmentCard({
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
             style={{ backgroundColor: department.color + "20" }}
           >
-            <span className="text-sm font-bold" style={{ color: department.color }}>
-              {department.name[0]}
-            </span>
+            <DeptIcon
+              icon={department.icon}
+              className="h-5 w-5"
+              style={{ color: department.color }}
+            />
           </div>
           <div>
             <h2 className="font-semibold text-ink group-hover:text-accent transition-colors">

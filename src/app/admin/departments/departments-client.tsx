@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import DeptIcon from "@/components/DeptIcon";
 import type { Department } from "@/types/database";
 
 const DEPT_COLORS = [
@@ -100,13 +101,14 @@ function DeptForm({
               key={ic}
               type="button"
               onClick={() => setIcon(ic)}
-              className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+              title={ic}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
                 icon === ic
                   ? "border-accent bg-accent-soft text-accent"
                   : "border-border text-muted hover:border-accent hover:text-ink"
               }`}
             >
-              {ic}
+              <DeptIcon icon={ic} className="h-5 w-5" />
             </button>
           ))}
         </div>
@@ -205,7 +207,9 @@ export default function DepartmentsClient({
                       style={{ backgroundColor: dept.color }}
                     />
                   </td>
-                  <td className="px-4 py-3 text-muted">{dept.icon}</td>
+                  <td className="px-4 py-3 text-muted">
+                    <DeptIcon icon={dept.icon} className="h-5 w-5" />
+                  </td>
                   <td className="px-4 py-3 text-muted">{dept.sort_order}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">

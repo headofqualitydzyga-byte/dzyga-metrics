@@ -1,7 +1,12 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireProfile, canManageAdmin } from "@/lib/auth";
 import DepartmentsClient from "./departments-client";
 
 export default async function DepartmentsPage() {
+  const { profile } = await requireProfile();
+  if (!canManageAdmin(profile.role)) redirect("/admin/metrics");
+
   const supabase = await createClient();
   const { data: departments } = await supabase
     .from("departments")

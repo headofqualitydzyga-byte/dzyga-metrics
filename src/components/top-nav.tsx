@@ -18,9 +18,12 @@ const ADMIN_LINKS: NavLink[] = [
   { href: "/admin/metrics", label: "Метрики" },
 ];
 
+const METRICS_LINK: NavLink = { href: "/admin/metrics", label: "Метрики" };
+
 function getLinks(role: UserRole): NavLink[] {
   const links: NavLink[] = [{ href: "/dashboard", label: "Дашборд" }];
   if (role === "admin") links.push(...ADMIN_LINKS);
+  else if (role === "viewer") links.push(METRICS_LINK);
   return links;
 }
 

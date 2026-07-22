@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireProfile, canManageAdmin } from "@/lib/auth";
+import { requireProfile, canManageMetrics } from "@/lib/auth";
 import { TopNav } from "@/components/top-nav";
 
 export default async function AdminLayout({
@@ -8,7 +8,9 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const { profile, email } = await requireProfile();
-  if (!canManageAdmin(profile.role)) redirect("/");
+  // Broadest gate for the /admin/* tree: admin or viewer (CEO). Pages that
+  // are admin-only (employees, departments) enforce that themselves below.
+  if (!canManageMetrics(profile.role)) redirect("/");
 
   return (
     <div className="flex min-h-dvh flex-col bg-page">

@@ -13,6 +13,7 @@ import {
 } from "@/lib/metrics/status";
 import MetricChart from "./MetricChart";
 import WeekSelector from "./WeekSelector";
+import DeptIcon from "@/components/DeptIcon";
 import type {
   Department,
   MetricDefinition,
@@ -104,12 +105,11 @@ export default function DepartmentDashboard({
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
             style={{ backgroundColor: department.color + "20" }}
           >
-            <span
-              className="text-base font-bold"
+            <DeptIcon
+              icon={department.icon}
+              className="h-6 w-6"
               style={{ color: department.color }}
-            >
-              {department.name[0]}
-            </span>
+            />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-ink">

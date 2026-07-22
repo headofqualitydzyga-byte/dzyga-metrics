@@ -33,3 +33,7 @@ export function canSeeAllDepartments(role: UserRole) {
 export function canManageAdmin(role: UserRole) {
   return role === "admin";
 }
+
+export function canManageMetrics(role: UserRole) {
+  return role === "admin" || role === "viewer";
+}
