@@ -1,4 +1,4 @@
-import { Bot, Context, session, SessionFlavor } from "grammy";
+import { Bot, Context, session, SessionFlavor, StorageAdapter } from "grammy";
 import { createAdminClient } from "@/lib/supabase/server";
 import { calcStatus, getCurrentWeekStart, formatWeekStart, getWeekLabel } from "@/lib/metrics/status";
 import {
@@ -19,12 +19,40 @@ interface SubmitSession {
 
 type MyContext = Context & SessionFlavor<SubmitSession>;
 
+// grammy's default in-memory session store doesn't survive across
+// serverless invocations. Persist sessions in Supabase instead so a
+// multi-step flow (e.g. /submit) keeps its state between messages.
+function createSupabaseSessionStorage(): StorageAdapter<SubmitSession> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+
+  return {
+    async read(key) {
+      const { data } = await supabase
+        .from("bot_sessions")
+        .select("data")
+        .eq("id", key)
+        .single();
+      return (data?.data as SubmitSession | undefined) ?? undefined;
+    },
+    async write(key, value) {
+      await supabase
+        .from("bot_sessions")
+        .upsert({ id: key, data: value, updated_at: new Date().toISOString() });
+    },
+    async delete(key) {
+      await supabase.from("bot_sessions").delete().eq("id", key);
+    },
+  };
+}
+
 export function createBot(token: string) {
   const bot = new Bot<MyContext>(token);
 
   bot.use(
     session({
       initial: (): SubmitSession => ({}),
+      storage: createSupabaseSessionStorage(),
     })
   );
 
