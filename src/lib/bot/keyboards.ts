@@ -1,5 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import { getWeekLabel, getCurrentWeekStart, formatWeekStart } from "@/lib/metrics/status";
+import type { MetricDefinition } from "@/types/database";
 
 export function weekPickerKeyboard(): InlineKeyboard {
   const kb = new InlineKeyboard();
@@ -31,8 +32,19 @@ export function booleanKeyboard(metricId: string): InlineKeyboard {
     .text("❌ Ні", `bool:${metricId}:0`);
 }
 
-export function updateKeyboard(metricId: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("Так, оновити", `update:${metricId}:yes`)
-    .text("Пропустити", `update:${metricId}:no`);
+export function metricPickerKeyboard(
+  metrics: MetricDefinition[],
+  answeredIds: Set<string>,
+  weekStart: string
+): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const m of metrics) {
+    const icon = answeredIds.has(m.id) ? "✅" : "⬜";
+    kb.text(`${icon} ${m.name}`, `pick:${m.id}`).row();
+  }
+  if (answeredIds.size > 0) {
+    kb.text("💾 Зберегти", `confirm:${weekStart}`).row();
+  }
+  kb.text("❌ Скасувати", "cancel");
+  return kb;
 }

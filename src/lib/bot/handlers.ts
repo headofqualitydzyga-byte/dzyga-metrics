@@ -5,16 +5,16 @@ import {
   weekPickerKeyboard,
   confirmKeyboard,
   booleanKeyboard,
-  updateKeyboard,
+  metricPickerKeyboard,
 } from "./keyboards";
 import type { MetricDefinition } from "@/types/database";
 
 interface SubmitSession {
   weekStart?: string;
   metrics?: MetricDefinition[];
-  currentIndex?: number;
   values?: Record<string, number>;
-  awaitingUpdate?: string | null;
+  existing?: Record<string, number>;
+  awaitingValue?: string | null;
 }
 
 type MyContext = Context & SessionFlavor<SubmitSession>;
@@ -183,7 +183,8 @@ export function createBot(token: string) {
 
     ctx.session.metrics = metrics;
     ctx.session.values = {};
-    ctx.session.currentIndex = undefined;
+    ctx.session.existing = {};
+    ctx.session.awaitingValue = null;
 
     await ctx.reply(
       "📅 За який тиждень вводимо метрики?",
@@ -191,16 +192,66 @@ export function createBot(token: string) {
     );
   });
 
-  // Week picker callback
+  // Week picker callback — loads already-saved values, then shows the metric picker
   bot.callbackQuery(/^week:(.+)$/, async (ctx) => {
     const weekStart = ctx.match[1];
     ctx.session.weekStart = weekStart;
-    ctx.session.currentIndex = 0;
+    ctx.session.values = {};
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const telegramId = String(ctx.from?.id);
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", telegramId)
+      .single();
+
+    const existing: Record<string, number> = {};
+    if (profile) {
+      const { data: subsRaw } = await supabase
+        .from("metric_submissions")
+        .select("metric_definition_id, value")
+        .eq("profile_id", profile.id)
+        .eq("week_start", weekStart);
+      for (const s of (subsRaw ?? []) as Array<{
+        metric_definition_id: string;
+        value: number;
+      }>) {
+        existing[s.metric_definition_id] = s.value;
+      }
+    }
+    ctx.session.existing = existing;
+
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(
-      `📅 Тиждень: ${getWeekLabel(weekStart)}\n\nПочинаємо введення метрик...`
-    );
-    await askNextMetric(ctx);
+    await showMetricPicker(ctx, { edit: true });
+  });
+
+  // Metric picker: user chose which metric to enter/fix
+  bot.callbackQuery(/^pick:(.+)$/, async (ctx) => {
+    const metricId = ctx.match[1];
+    const metric = ctx.session.metrics?.find((m) => m.id === metricId);
+    if (!metric) {
+      await ctx.answerCallbackQuery("Метрику не знайдено");
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    if (metric.value_type === "boolean") {
+      await ctx.editMessageText(`*${metric.name}*\n\nВиконано?`, {
+        parse_mode: "Markdown",
+        reply_markup: booleanKeyboard(metric.id),
+      });
+    } else {
+      ctx.session.awaitingValue = metricId;
+      const current =
+        ctx.session.values?.[metricId] ?? ctx.session.existing?.[metricId];
+      await ctx.editMessageText(
+        `*${metric.name}*\n\nВведіть значення (${metric.unit})` +
+          (current !== undefined ? `\nПоточне: ${current}` : ""),
+        { parse_mode: "Markdown" }
+      );
+    }
   });
 
   // Boolean answer callback
@@ -208,39 +259,22 @@ export function createBot(token: string) {
     const [, metricId, valueStr] = ctx.match;
     const value = parseInt(valueStr);
     ctx.session.values = { ...(ctx.session.values ?? {}), [metricId]: value };
-    ctx.session.currentIndex = (ctx.session.currentIndex ?? 0) + 1;
     await ctx.answerCallbackQuery(value === 100 ? "✅ Записано: Так" : "❌ Записано: Ні");
-    await ctx.editMessageText(value === 100 ? "✅ Так" : "❌ Ні");
-    await askNextMetric(ctx);
-  });
-
-  // Update existing answer callback
-  bot.callbackQuery(/^update:([^:]+):(yes|no)$/, async (ctx) => {
-    const [, metricId, decision] = ctx.match;
-    await ctx.answerCallbackQuery();
-    if (decision === "no") {
-      ctx.session.currentIndex = (ctx.session.currentIndex ?? 0) + 1;
-      await ctx.editMessageText("Пропущено");
-      await askNextMetric(ctx);
-    } else {
-      ctx.session.awaitingUpdate = metricId;
-      const metric = ctx.session.metrics?.find((m) => m.id === metricId);
-      if (metric?.value_type === "boolean") {
-        await ctx.editMessageText(
-          `Оновити: ${metric.name}`,
-          { reply_markup: booleanKeyboard(metricId) }
-        );
-      } else {
-        await ctx.editMessageText(
-          `Введіть нове значення для "${metric?.name}" (${metric?.unit}):`
-        );
-      }
-    }
+    await showMetricPicker(ctx, { edit: true });
   });
 
   // Confirm callback
   bot.callbackQuery(/^confirm:(.+)$/, async (ctx) => {
     const weekStart = ctx.match[1];
+    const values = ctx.session.values ?? {};
+
+    if (Object.keys(values).length === 0) {
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText("Немає нових значень для збереження.");
+      ctx.session = {};
+      return;
+    }
+
     await ctx.answerCallbackQuery("Зберігаємо...");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -255,7 +289,6 @@ export function createBot(token: string) {
 
     if (!profile) return;
 
-    const values = ctx.session.values ?? {};
     const metrics = ctx.session.metrics ?? [];
 
     const upserts = Object.entries(values).map(([metricId, value]) => ({
@@ -331,30 +364,16 @@ export function createBot(token: string) {
 
   // Text message handler (for numeric input)
   bot.on("message:text", async (ctx) => {
-    // Awaiting update for existing metric
-    if (ctx.session.awaitingUpdate) {
-      const metricId = ctx.session.awaitingUpdate;
-      const value = parseFloat(ctx.message.text.replace(",", "."));
-      if (isNaN(value)) {
-        await ctx.reply("Введіть числове значення:");
-        return;
-      }
-      ctx.session.values = { ...(ctx.session.values ?? {}), [metricId]: value };
-      ctx.session.awaitingUpdate = null;
-      const metric = ctx.session.metrics?.find((m) => m.id === metricId);
-      await ctx.reply(`Записано: ${value} ${metric?.unit}`);
-      ctx.session.currentIndex = (ctx.session.currentIndex ?? 0) + 1;
-      await askNextMetric(ctx);
+    const metricId = ctx.session.awaitingValue;
+    if (!metricId) return;
+
+    const metric = ctx.session.metrics?.find((m) => m.id === metricId);
+    if (!metric) {
+      ctx.session.awaitingValue = null;
       return;
     }
 
-    const metrics = ctx.session.metrics ?? [];
-    const idx = ctx.session.currentIndex;
-    if (idx === undefined || !metrics[idx]) return;
-
-    const metric = metrics[idx];
     const value = parseFloat(ctx.message.text.replace(",", "."));
-
     if (isNaN(value)) {
       await ctx.reply(
         `Введіть числове значення для "${metric.name}" (${metric.unit}):`
@@ -362,91 +381,31 @@ export function createBot(token: string) {
       return;
     }
 
-    ctx.session.values = { ...(ctx.session.values ?? {}), [metric.id]: value };
+    ctx.session.values = { ...(ctx.session.values ?? {}), [metricId]: value };
+    ctx.session.awaitingValue = null;
     await ctx.reply(`Записано: ${value} ${metric.unit}`);
-    ctx.session.currentIndex = idx + 1;
-    await askNextMetric(ctx);
+    await showMetricPicker(ctx, { edit: false });
   });
 
   return bot;
 }
 
-async function askNextMetric(ctx: MyContext) {
+async function showMetricPicker(ctx: MyContext, opts: { edit: boolean }) {
   const metrics = ctx.session.metrics ?? [];
-  const idx = ctx.session.currentIndex ?? 0;
-
-  if (idx >= metrics.length) {
-    // All done — show summary
-    const values = ctx.session.values ?? {};
-    const weekStart = ctx.session.weekStart ?? formatWeekStart(getCurrentWeekStart());
-
-    if (Object.keys(values).length === 0) {
-      await ctx.reply("Жодного значення не введено. Спробуйте /submit ще раз.");
-      ctx.session = {};
-      return;
-    }
-
-    const summary = metrics
-      .filter((m) => values[m.id] !== undefined)
-      .map((m) => `• ${m.name}: ${values[m.id]} ${m.unit}`)
-      .join("\n");
-
-    await ctx.reply(
-      `📋 *Підсумок за ${getWeekLabel(weekStart)}:*\n\n${summary}\n\nПідтверджуємо?`,
-      {
-        parse_mode: "Markdown",
-        reply_markup: confirmKeyboard(weekStart),
-      }
-    );
-    return;
-  }
-
-  const metric = metrics[idx];
   const weekStart = ctx.session.weekStart ?? formatWeekStart(getCurrentWeekStart());
+  const values = ctx.session.values ?? {};
+  const existing = ctx.session.existing ?? {};
+  const answeredIds = new Set([...Object.keys(values), ...Object.keys(existing)]);
 
-  // Check if already submitted
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-  const telegramId = String(ctx.from?.id);
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("telegram_id", telegramId)
-    .single();
+  const text =
+    `📅 Тиждень: ${getWeekLabel(weekStart)}\n\n` +
+    `Оберіть метрику для введення (${answeredIds.size}/${metrics.length} заповнено):`;
 
-  if (profile) {
-    const { data: existing } = await supabase
-      .from("metric_submissions")
-      .select("value")
-      .eq("profile_id", profile.id)
-      .eq("metric_definition_id", metric.id)
-      .eq("week_start", weekStart)
-      .single();
+  const kb = metricPickerKeyboard(metrics, answeredIds, weekStart);
 
-    if (existing && !(metric.id in (ctx.session.values ?? {}))) {
-      await ctx.reply(
-        `Метрика "${metric.name}" вже здана: *${existing.value} ${metric.unit}*\nОновити?`,
-        {
-          parse_mode: "Markdown",
-          reply_markup: updateKeyboard(metric.id),
-        }
-      );
-      return;
-    }
-  }
-
-  if (metric.value_type === "boolean") {
-    await ctx.reply(
-      `(${idx + 1}/${metrics.length}) *${metric.name}*\n\nВиконано?`,
-      {
-        parse_mode: "Markdown",
-        reply_markup: booleanKeyboard(metric.id),
-      }
-    );
+  if (opts.edit) {
+    await ctx.editMessageText(text, { reply_markup: kb });
   } else {
-    await ctx.reply(
-      `(${idx + 1}/${metrics.length}) *${metric.name}*\n\nВведіть значення (${metric.unit}):`,
-      { parse_mode: "Markdown" }
-    );
+    await ctx.reply(text, { reply_markup: kb });
   }
 }
