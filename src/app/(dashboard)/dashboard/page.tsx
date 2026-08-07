@@ -1,15 +1,24 @@
 import { redirect } from "next/navigation";
 import { requireProfile, canSeeAllDepartments } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { calcStatus, getCurrentWeekStart, formatWeekStart, getWeekLabel } from "@/lib/metrics/status";
+import {
+  calcStatus,
+  getCurrentWeekStart,
+  getCurrentMonthStart,
+  formatWeekStart,
+  getWeekLabel,
+  getMonthLabel,
+} from "@/lib/metrics/status";
+import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
 import DepartmentCard from "@/components/dashboard/DepartmentCard";
 import WeekSelector from "@/components/dashboard/WeekSelector";
+import MonthSelector from "@/components/dashboard/MonthSelector";
 import type { Department, MetricDefinition, MetricSubmission } from "@/types/database";
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; month?: string; view?: string }>;
 }) {
   const { profile } = await requireProfile();
   const params = await searchParams;
@@ -30,29 +39,45 @@ export default async function DashboardPage({
   }
 
   const weekStart = params.week ?? formatWeekStart(getCurrentWeekStart());
+  const monthStart = params.month ?? formatWeekStart(getCurrentMonthStart());
+  const view: "weekly" | "monthly" = params.view === "monthly" ? "monthly" : "weekly";
+  const activePeriodStart = view === "monthly" ? monthStart : weekStart;
+
   const supabase = await createClient();
 
-  const [{ data: departments }, { data: metrics }, { data: submissions }] =
-    await Promise.all([
-      supabase.from("departments").select("*").order("sort_order"),
-      supabase
-        .from("metric_definitions")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order"),
-      supabase
-        .from("metric_submissions")
-        .select("*")
-        .eq("week_start", weekStart),
-    ]);
+  const [{ data: departments }, { data: metrics }] = await Promise.all([
+    supabase.from("departments").select("*").order("sort_order"),
+    supabase
+      .from("metric_definitions")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order"),
+  ]);
 
   const depts = (departments ?? []) as Department[];
-  const defs = (metrics ?? []) as MetricDefinition[];
+  let defs = (metrics ?? []) as MetricDefinition[];
+
+  if (profile.role !== "admin") {
+    const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
+    defs = filterByAccess(defs, profile.role, accessibleIds);
+  }
+
+  const activeDefs = defs.filter((d) => d.frequency === view);
+  const activeMetricIds = activeDefs.map((d) => d.id);
+
+  const { data: submissions } = activeMetricIds.length
+    ? await supabase
+        .from("metric_submissions")
+        .select("*")
+        .eq("week_start", activePeriodStart)
+        .in("metric_definition_id", activeMetricIds)
+    : { data: [] };
+
   const subs = (submissions ?? []) as MetricSubmission[];
 
   // Aggregate status counts
   let normal = 0, warning = 0, critical = 0, notSubmitted = 0;
-  for (const def of defs) {
+  for (const def of activeDefs) {
     const sub = subs.find((s) => s.metric_definition_id === def.id);
     const status = calcStatus(def, sub?.value ?? null);
     if (status === "normal") normal++;
@@ -61,16 +86,48 @@ export default async function DashboardPage({
     else notSubmitted++;
   }
 
+  const periodLabel =
+    view === "monthly" ? getMonthLabel(activePeriodStart) : getWeekLabel(activePeriodStart);
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-ink">Дашборд</h1>
           <p className="mt-1 text-sm text-muted">
-            Тиждень: {getWeekLabel(weekStart)}
+            {view === "monthly" ? "Місяць" : "Тиждень"}: {periodLabel}
           </p>
         </div>
-        <WeekSelector currentWeek={weekStart} />
+        <div className="flex items-center gap-3">
+          {view === "monthly" ? (
+            <MonthSelector currentMonth={monthStart} />
+          ) : (
+            <WeekSelector currentWeek={weekStart} />
+          )}
+        </div>
+      </div>
+
+      {/* Weekly / monthly toggle */}
+      <div className="mb-6 flex gap-1">
+        {(["weekly", "monthly"] as const).map((v) => {
+          const qs = new URLSearchParams();
+          qs.set("view", v);
+          qs.set("week", weekStart);
+          qs.set("month", monthStart);
+          return (
+            <a
+              key={v}
+              href={`?${qs.toString()}`}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                view === v
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {v === "weekly" ? "Щотижневі" : "Щомісячні"}
+            </a>
+          );
+        })}
       </div>
 
       {/* Summary bar */}
@@ -91,7 +148,7 @@ export default async function DashboardPage({
       {/* Department grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {depts.map((dept) => {
-          const deptDefs = defs.filter((d) => d.department_id === dept.id);
+          const deptDefs = activeDefs.filter((d) => d.department_id === dept.id);
           const deptSubs = subs.filter((s) =>
             deptDefs.some((d) => d.id === s.metric_definition_id)
           );
@@ -102,6 +159,8 @@ export default async function DashboardPage({
               metrics={deptDefs}
               submissions={deptSubs}
               weekStart={weekStart}
+              monthStart={monthStart}
+              view={view}
             />
           );
         })}

@@ -1,16 +1,30 @@
 import { Bot, Context, session, SessionFlavor, StorageAdapter } from "grammy";
 import { createAdminClient } from "@/lib/supabase/server";
-import { calcStatus, getCurrentWeekStart, formatWeekStart, getWeekLabel } from "@/lib/metrics/status";
+import {
+  calcStatus,
+  getCurrentWeekStart,
+  getCurrentMonthStart,
+  formatWeekStart,
+  getWeekLabel,
+  getMonthLabel,
+  getPeriodLabel,
+} from "@/lib/metrics/status";
+import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
 import {
   weekPickerKeyboard,
-  confirmKeyboard,
+  monthPickerKeyboard,
+  frequencyPickerKeyboard,
   booleanKeyboard,
   metricPickerKeyboard,
 } from "./keyboards";
 import type { MetricDefinition } from "@/types/database";
 
 interface SubmitSession {
+  // Generic active period key: a Monday for a weekly flow, 1st-of-month
+  // for a monthly flow — see `frequency` for which one it currently is.
   weekStart?: string;
+  frequency?: "weekly" | "monthly";
+  allMetrics?: MetricDefinition[];
   metrics?: MetricDefinition[];
   values?: Record<string, number>;
   existing?: Record<string, number>;
@@ -80,8 +94,8 @@ export function createBot(token: string) {
       `👋 Привіт, ${profile.full_name ?? profile.email}!\n\n` +
         `📌 Відділ: ${dept?.name ?? "—"}\n\n` +
         `Доступні команди:\n` +
-        `/submit — ввести метрики за тиждень\n` +
-        `/status — перевірити статус за поточний тиждень\n` +
+        `/submit — ввести метрики\n` +
+        `/status — перевірити статус\n` +
         `/help — допомога`
     );
   });
@@ -90,8 +104,8 @@ export function createBot(token: string) {
   bot.command("help", async (ctx) => {
     await ctx.reply(
       "📋 *Команди:*\n\n" +
-        "/submit — ввести метрики за тиждень\n" +
-        "/status — перевірити статус за поточний тиждень\n" +
+        "/submit — ввести метрики\n" +
+        "/status — перевірити статус\n" +
         "/start — початок\n\n" +
         "Дані зберігаються в систему Dzyga Metrics.",
       { parse_mode: "Markdown" }
@@ -106,7 +120,7 @@ export function createBot(token: string) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, department_id")
+      .select("id, role, department_id")
       .eq("telegram_id", telegramId)
       .single();
 
@@ -115,7 +129,6 @@ export function createBot(token: string) {
       return;
     }
 
-    const weekStart = formatWeekStart(getCurrentWeekStart());
     const { data: metricsRaw } = await supabase
       .from("metric_definitions")
       .select("*")
@@ -123,31 +136,55 @@ export function createBot(token: string) {
       .eq("is_active", true)
       .order("sort_order");
 
-    const metrics = metricsRaw as MetricDefinition[] | null;
+    let metrics = (metricsRaw ?? []) as MetricDefinition[];
+    if (profile.role !== "admin") {
+      const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
+      metrics = filterByAccess(metrics, profile.role, accessibleIds);
+    }
 
-    if (!metrics?.length) {
-      await ctx.reply("Метрики для вашого відділу не налаштовано.");
+    if (!metrics.length) {
+      await ctx.reply("Немає доступних метрик. Зверніться до адміністратора.");
       return;
     }
 
+    const weekStart = formatWeekStart(getCurrentWeekStart());
+    const monthStart = formatWeekStart(getCurrentMonthStart());
+
     const { data: subsRaw } = await supabase
       .from("metric_submissions")
-      .select("*")
+      .select("metric_definition_id, value, week_start")
       .eq("profile_id", profile.id)
-      .eq("week_start", weekStart);
+      .in("week_start", [weekStart, monthStart]);
 
-    const subs = subsRaw as Array<{ metric_definition_id: string; value: number }> | null;
+    const subs = (subsRaw ?? []) as Array<{
+      metric_definition_id: string;
+      value: number;
+      week_start: string;
+    }>;
 
-    const lines = metrics.map((m) => {
-      const sub = subs?.find((s) => s.metric_definition_id === m.id);
-      const icon = sub ? "✅" : "⬜";
-      return `${icon} ${m.name}${sub ? `: ${sub.value} ${m.unit}` : ""}`;
-    });
+    const weekly = metrics.filter((m) => m.frequency === "weekly");
+    const monthly = metrics.filter((m) => m.frequency === "monthly");
 
-    await ctx.reply(
-      `📊 *Статус за ${getWeekLabel(weekStart)}:*\n\n${lines.join("\n")}`,
-      { parse_mode: "Markdown" }
-    );
+    const renderGroup = (defs: MetricDefinition[], periodStart: string) =>
+      defs
+        .map((m) => {
+          const sub = subs.find(
+            (s) => s.metric_definition_id === m.id && s.week_start === periodStart
+          );
+          const icon = sub ? "✅" : "⬜";
+          return `${icon} ${m.name}${sub ? `: ${sub.value} ${m.unit}` : ""}`;
+        })
+        .join("\n");
+
+    const parts: string[] = [];
+    if (weekly.length) {
+      parts.push(`📆 *Тижневі (${getWeekLabel(weekStart)}):*\n${renderGroup(weekly, weekStart)}`);
+    }
+    if (monthly.length) {
+      parts.push(`🗓️ *Місячні (${getMonthLabel(monthStart)}):*\n${renderGroup(monthly, monthStart)}`);
+    }
+
+    await ctx.reply(`📊 *Статус:*\n\n${parts.join("\n\n")}`, { parse_mode: "Markdown" });
   });
 
   // /submit
@@ -158,7 +195,7 @@ export function createBot(token: string) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, department_id")
+      .select("id, role, department_id")
       .eq("telegram_id", telegramId)
       .single();
 
@@ -174,28 +211,68 @@ export function createBot(token: string) {
       .eq("is_active", true)
       .order("sort_order");
 
-    const metrics = metricsData as MetricDefinition[] | null;
+    let metrics = (metricsData ?? []) as MetricDefinition[];
+    if (profile.role !== "admin") {
+      const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
+      metrics = filterByAccess(metrics, profile.role, accessibleIds);
+    }
 
-    if (!metrics?.length) {
-      await ctx.reply("Метрики для вашого відділу не налаштовано.");
+    if (!metrics.length) {
+      await ctx.reply("Немає доступних метрик. Зверніться до адміністратора.");
       return;
     }
 
-    ctx.session.metrics = metrics;
+    ctx.session.allMetrics = metrics;
     ctx.session.values = {};
     ctx.session.existing = {};
     ctx.session.awaitingValue = null;
 
-    await ctx.reply(
-      "📅 За який тиждень вводимо метрики?",
-      { reply_markup: weekPickerKeyboard() }
-    );
+    const weekly = metrics.filter((m) => m.frequency === "weekly");
+    const monthly = metrics.filter((m) => m.frequency === "monthly");
+
+    if (weekly.length && monthly.length) {
+      await ctx.reply("Тижневі чи місячні метрики вводимо?", {
+        reply_markup: frequencyPickerKeyboard(),
+      });
+    } else if (weekly.length) {
+      ctx.session.frequency = "weekly";
+      ctx.session.metrics = weekly;
+      await ctx.reply("📅 За який тиждень вводимо метрики?", {
+        reply_markup: weekPickerKeyboard(),
+      });
+    } else {
+      ctx.session.frequency = "monthly";
+      ctx.session.metrics = monthly;
+      await ctx.reply("🗓️ За який місяць вводимо метрики?", {
+        reply_markup: monthPickerKeyboard(),
+      });
+    }
   });
 
-  // Week picker callback — loads already-saved values, then shows the metric picker
-  bot.callbackQuery(/^week:(.+)$/, async (ctx) => {
-    const weekStart = ctx.match[1];
-    ctx.session.weekStart = weekStart;
+  // Frequency choice callback (only shown when both kinds are available)
+  bot.callbackQuery(/^freq:(weekly|monthly)$/, async (ctx) => {
+    const frequency = ctx.match[1] as "weekly" | "monthly";
+    ctx.session.frequency = frequency;
+    ctx.session.metrics = (ctx.session.allMetrics ?? []).filter(
+      (m) => m.frequency === frequency
+    );
+    await ctx.answerCallbackQuery();
+
+    if (frequency === "monthly") {
+      await ctx.editMessageText("🗓️ За який місяць вводимо метрики?", {
+        reply_markup: monthPickerKeyboard(),
+      });
+    } else {
+      await ctx.editMessageText("📅 За який тиждень вводимо метрики?", {
+        reply_markup: weekPickerKeyboard(),
+      });
+    }
+  });
+
+  // Period picker callback (week or month) — loads already-saved values,
+  // then shows the metric picker.
+  async function handlePeriodPicked(ctx: MyContext, periodStart: string) {
+    ctx.session.weekStart = periodStart;
     ctx.session.values = {};
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -209,11 +286,13 @@ export function createBot(token: string) {
 
     const existing: Record<string, number> = {};
     if (profile) {
+      const metricIds = (ctx.session.metrics ?? []).map((m) => m.id);
       const { data: subsRaw } = await supabase
         .from("metric_submissions")
         .select("metric_definition_id, value")
         .eq("profile_id", profile.id)
-        .eq("week_start", weekStart);
+        .eq("week_start", periodStart)
+        .in("metric_definition_id", metricIds);
       for (const s of (subsRaw ?? []) as Array<{
         metric_definition_id: string;
         value: number;
@@ -225,7 +304,10 @@ export function createBot(token: string) {
 
     await ctx.answerCallbackQuery();
     await showMetricPicker(ctx, { edit: true });
-  });
+  }
+
+  bot.callbackQuery(/^week:(.+)$/, (ctx) => handlePeriodPicked(ctx, ctx.match[1]));
+  bot.callbackQuery(/^month:(.+)$/, (ctx) => handlePeriodPicked(ctx, ctx.match[1]));
 
   // Metric picker: user chose which metric to enter/fix
   bot.callbackQuery(/^pick:(.+)$/, async (ctx) => {
@@ -290,6 +372,7 @@ export function createBot(token: string) {
     if (!profile) return;
 
     const metrics = ctx.session.metrics ?? [];
+    const frequency = ctx.session.frequency ?? "weekly";
 
     const upserts = Object.entries(values).map(([metricId, value]) => ({
       profile_id: profile.id,
@@ -322,7 +405,7 @@ export function createBot(token: string) {
       .join("\n");
 
     await ctx.editMessageText(
-      `✅ *Збережено за ${getWeekLabel(weekStart)}!*\n\n${summary}`,
+      `✅ *Збережено за ${getPeriodLabel(frequency, weekStart)}!*\n\n${summary}`,
       { parse_mode: "Markdown" }
     );
 
@@ -392,13 +475,15 @@ export function createBot(token: string) {
 
 async function showMetricPicker(ctx: MyContext, opts: { edit: boolean }) {
   const metrics = ctx.session.metrics ?? [];
+  const frequency = ctx.session.frequency ?? "weekly";
   const weekStart = ctx.session.weekStart ?? formatWeekStart(getCurrentWeekStart());
   const values = ctx.session.values ?? {};
   const existing = ctx.session.existing ?? {};
   const answeredIds = new Set([...Object.keys(values), ...Object.keys(existing)]);
 
+  const periodIcon = frequency === "monthly" ? "🗓️ Місяць" : "📅 Тиждень";
   const text =
-    `📅 Тиждень: ${getWeekLabel(weekStart)}\n\n` +
+    `${periodIcon}: ${getPeriodLabel(frequency, weekStart)}\n\n` +
     `Оберіть метрику для введення (${answeredIds.size}/${metrics.length} заповнено):`;
 
   const kb = metricPickerKeyboard(metrics, answeredIds, weekStart);

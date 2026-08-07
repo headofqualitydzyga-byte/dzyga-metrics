@@ -3,7 +3,12 @@
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { MetricDefinition, MetricType, ValueType } from "@/types/database";
+import type {
+  MetricDefinition,
+  MetricFrequency,
+  MetricType,
+  ValueType,
+} from "@/types/database";
 
 const TYPE_LABELS: Record<MetricType, string> = {
   growing: "Зростаючий ↗",
@@ -15,6 +20,11 @@ const VALUE_TYPE_LABELS: Record<ValueType, string> = {
   percent: "Відсоток (%)",
   number: "Число",
   boolean: "Так/Ні",
+};
+
+const FREQUENCY_LABELS: Record<MetricFrequency, string> = {
+  weekly: "Щотижнева",
+  monthly: "Щомісячна",
 };
 
 function MetricForm({
@@ -33,6 +43,9 @@ function MetricForm({
   const [type, setType] = useState<MetricType>(initial?.type ?? "growing");
   const [valueType, setValueType] = useState<ValueType>(
     initial?.value_type ?? "percent"
+  );
+  const [frequency, setFrequency] = useState<MetricFrequency>(
+    initial?.frequency ?? "weekly"
   );
   const [unit, setUnit] = useState(initial?.unit ?? "%");
   const [planValue, setPlanValue] = useState(
@@ -68,6 +81,7 @@ function MetricForm({
         description: description.trim() || null,
         type,
         value_type: valueType,
+        frequency,
         unit: unit.trim() || "%",
         plan_value: planValue ? parseFloat(planValue) : null,
         range_min: rangeMin ? parseFloat(rangeMin) : null,
@@ -111,7 +125,7 @@ function MetricForm({
       </div>
       {field("Опис", description, setDescription, "text", "Необов'язково")}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-ink">
             Тип метрики
@@ -138,6 +152,22 @@ function MetricForm({
             className="w-full rounded-lg border border-border bg-page px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
           >
             {Object.entries(VALUE_TYPE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-ink">
+            Частота
+          </label>
+          <select
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value as MetricFrequency)}
+            className="w-full rounded-lg border border-border bg-page px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+          >
+            {Object.entries(FREQUENCY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
               </option>
@@ -214,6 +244,7 @@ export default function MetricsClient({
         description: data.description,
         type: data.type,
         value_type: data.value_type,
+        frequency: data.frequency,
         unit: data.unit,
         plan_value: data.plan_value,
         range_min: data.range_min,
@@ -241,6 +272,7 @@ export default function MetricsClient({
         description: data.description,
         type: data.type,
         value_type: data.value_type,
+        frequency: data.frequency,
         unit: data.unit,
         plan_value: data.plan_value,
         range_min: data.range_min,
@@ -326,6 +358,7 @@ export default function MetricsClient({
               <th className="px-4 py-3 text-left font-medium text-muted">Метрика</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Відділ</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Тип</th>
+              <th className="px-4 py-3 text-left font-medium text-muted">Частота</th>
               <th className="px-4 py-3 text-left font-medium text-muted">План</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Статус</th>
               <th className="px-4 py-3" />
@@ -349,6 +382,7 @@ export default function MetricsClient({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">{TYPE_LABELS[m.type]}</td>
+                  <td className="px-4 py-3 text-muted">{FREQUENCY_LABELS[m.frequency]}</td>
                   <td className="px-4 py-3 text-muted">
                     {m.type === "range"
                       ? `${m.range_min ?? "?"} – ${m.range_max ?? "?"} ${m.unit}`
@@ -390,7 +424,7 @@ export default function MetricsClient({
                 </tr>
                 {editId === m.id && (
                   <tr className="border-b border-border bg-page">
-                    <td colSpan={6} className="px-4 py-4">
+                    <td colSpan={7} className="px-4 py-4">
                       <MetricForm
                         initial={m}
                         departmentId={m.department_id}

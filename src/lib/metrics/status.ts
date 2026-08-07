@@ -127,6 +127,25 @@ export function formatWeekStart(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function getCurrentMonthStart(): Date {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  first.setHours(0, 0, 0, 0);
+  return first;
+}
+
+const UKR_MONTHS = [
+  "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
+  "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень",
+];
+
+export function getMonthLabel(periodStart: string): string {
+  const d = new Date(periodStart);
+  return `${UKR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// Assumes weekStart is a Monday (adds +6 days for the range end) — never
+// call this with a monthly metric's period key, use getMonthLabel there.
 export function getWeekLabel(weekStart: string): string {
   const start = new Date(weekStart);
   const end = new Date(start);
@@ -134,4 +153,11 @@ export function getWeekLabel(weekStart: string): string {
   const fmt = (d: Date) =>
     d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
   return `${fmt(start)} – ${fmt(end)}`;
+}
+
+export function getPeriodLabel(
+  frequency: "weekly" | "monthly",
+  periodStart: string
+): string {
+  return frequency === "monthly" ? getMonthLabel(periodStart) : getWeekLabel(periodStart);
 }

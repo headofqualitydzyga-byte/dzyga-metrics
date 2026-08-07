@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { getCurrentWeekStart, formatWeekStart, getWeekLabel } from "@/lib/metrics/status";
+import {
+  getCurrentWeekStart,
+  getCurrentMonthStart,
+  formatWeekStart,
+  getWeekLabel,
+  getMonthLabel,
+} from "@/lib/metrics/status";
+import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
+import type { MetricDefinition } from "@/types/database";
+
+// Every month has exactly one Monday in its final 7 days.
+function isLastMondayOfMonth(d: Date): boolean {
+  const next = new Date(d);
+  next.setDate(d.getDate() + 7);
+  return next.getMonth() !== d.getMonth();
+}
 
 // Called every Monday at 09:00 via Vercel Cron
 export async function GET(req: Request) {
@@ -12,11 +27,20 @@ export async function GET(req: Request) {
 
   const supabase = createAdminClient();
 
+  const now = new Date();
+  const isLastMonday = isLastMondayOfMonth(now);
+
   // Last week (the one that just ended)
   const currentWeek = getCurrentWeekStart();
   const lastWeek = new Date(currentWeek);
   lastWeek.setDate(lastWeek.getDate() - 7);
   const weekStart = formatWeekStart(lastWeek);
+  const monthStart = formatWeekStart(getCurrentMonthStart());
+
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    return NextResponse.json({ error: "TELEGRAM_BOT_TOKEN not set" }, { status: 500 });
+  }
 
   // Get all managers with telegram linked
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,40 +58,78 @@ export async function GET(req: Request) {
   }> | null;
 
   if (!managers?.length) {
-    return NextResponse.json({ ok: true, notified: 0 });
+    return NextResponse.json({ ok: true, notifiedWeekly: 0, notifiedMonthly: 0 });
   }
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) {
-    return NextResponse.json({ error: "TELEGRAM_BOT_TOKEN not set" }, { status: 500 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: defsRaw } = await (supabase as any)
+    .from("metric_definitions")
+    .select("*")
+    .eq("is_active", true);
+  const allDefs = (defsRaw ?? []) as MetricDefinition[];
+
+  async function sendReminder(chatId: string, text: string) {
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
   }
 
-  let notified = 0;
+  let notifiedWeekly = 0;
+  let notifiedMonthly = 0;
 
   for (const manager of managers) {
-    // Check if they have any submissions for last week
-    const { data: subs } = await supabase
-      .from("metric_submissions")
-      .select("id")
-      .eq("profile_id", manager.id)
-      .eq("week_start", weekStart)
-      .limit(1);
+    const deptDefs = allDefs.filter((d) => d.department_id === manager.department_id);
+    const accessibleIds = await getAccessibleMetricIds(supabase, manager.id);
+    const accessible = filterByAccess(deptDefs, "manager", accessibleIds);
 
-    if (!subs?.length) {
-      // Send reminder
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: manager.telegram_id,
-          text:
-            `📊 Нагадування!\n\nВи ще не здали метрики за ${getWeekLabel(weekStart)}.\n\n` +
-            `Введіть /submit щоб внести показники.`,
-        }),
-      });
-      notified++;
+    const hasWeekly = accessible.some((d) => d.frequency === "weekly");
+    const hasMonthly = accessible.some((d) => d.frequency === "monthly");
+
+    if (hasWeekly) {
+      const { data: subs } = await supabase
+        .from("metric_submissions")
+        .select("id")
+        .eq("profile_id", manager.id)
+        .eq("week_start", weekStart)
+        .limit(1);
+
+      if (!subs?.length) {
+        await sendReminder(
+          manager.telegram_id!,
+          `📊 Нагадування!\n\nВи ще не здали тижневі метрики за ${getWeekLabel(weekStart)}.\n\n` +
+            `Введіть /submit щоб внести показники.`
+        );
+        notifiedWeekly++;
+      }
+    }
+
+    if (isLastMonday && hasMonthly) {
+      const { data: subs } = await supabase
+        .from("metric_submissions")
+        .select("id")
+        .eq("profile_id", manager.id)
+        .eq("week_start", monthStart)
+        .limit(1);
+
+      if (!subs?.length) {
+        await sendReminder(
+          manager.telegram_id!,
+          `📊 Нагадування!\n\nВи ще не здали місячні метрики за ${getMonthLabel(monthStart)}.\n\n` +
+            `Введіть /submit щоб внести показники.`
+        );
+        notifiedMonthly++;
+      }
     }
   }
 
-  return NextResponse.json({ ok: true, notified, weekStart });
+  return NextResponse.json({
+    ok: true,
+    notifiedWeekly,
+    notifiedMonthly,
+    weekStart,
+    monthStart,
+    isLastMondayOfMonth: isLastMonday,
+  });
 }

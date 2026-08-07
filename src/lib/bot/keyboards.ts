@@ -1,5 +1,11 @@
 import { InlineKeyboard } from "grammy";
-import { getWeekLabel, getCurrentWeekStart, formatWeekStart } from "@/lib/metrics/status";
+import {
+  getWeekLabel,
+  getMonthLabel,
+  getCurrentWeekStart,
+  getCurrentMonthStart,
+  formatWeekStart,
+} from "@/lib/metrics/status";
 import type { MetricDefinition } from "@/types/database";
 
 export function weekPickerKeyboard(): InlineKeyboard {
@@ -17,6 +23,29 @@ export function weekPickerKeyboard(): InlineKeyboard {
   }
 
   return kb;
+}
+
+export function monthPickerKeyboard(): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const current = getCurrentMonthStart();
+  const currentStr = formatWeekStart(current);
+
+  kb.text(`🗓️ Поточний (${getMonthLabel(currentStr)})`, `month:${currentStr}`).row();
+
+  for (let i = 1; i <= 4; i++) {
+    const d = new Date(current.getFullYear(), current.getMonth() - i, 1);
+    const str = formatWeekStart(d);
+    kb.text(getMonthLabel(str), `month:${str}`).row();
+  }
+
+  return kb;
+}
+
+export function frequencyPickerKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("📆 Тижневі метрики", "freq:weekly")
+    .row()
+    .text("🗓️ Місячні метрики", "freq:monthly");
 }
 
 export function confirmKeyboard(weekStart: string): InlineKeyboard {

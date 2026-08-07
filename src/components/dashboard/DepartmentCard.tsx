@@ -26,11 +26,15 @@ export default function DepartmentCard({
   metrics,
   submissions,
   weekStart,
+  monthStart,
+  view,
 }: {
   department: Department;
   metrics: MetricDefinition[];
   submissions: MetricSubmission[];
   weekStart: string;
+  monthStart: string;
+  view: "weekly" | "monthly";
 }) {
   const top = metrics.slice(0, 4);
 
@@ -50,7 +54,7 @@ export default function DepartmentCard({
 
   return (
     <Link
-      href={`/dashboard/${department.id}?week=${weekStart}`}
+      href={`/dashboard/${department.id}?week=${weekStart}&month=${monthStart}&view=${view}`}
       className="group block rounded-xl border border-border bg-surface p-5 hover:border-accent transition-colors"
     >
       <div className="mb-4 flex items-start justify-between gap-2">

@@ -7,12 +7,13 @@ import {
   formatDeviation,
   getChartIcon,
   getStatusBg,
-  getWeekLabel,
   getCurrentWeekStart,
+  getCurrentMonthStart,
   formatWeekStart,
 } from "@/lib/metrics/status";
 import MetricChart from "./MetricChart";
 import WeekSelector from "./WeekSelector";
+import MonthSelector from "./MonthSelector";
 import DeptIcon from "@/components/DeptIcon";
 import type {
   Department,
@@ -40,6 +41,10 @@ export default function DepartmentDashboard({
   weekSubmissions,
   chartSubmissions,
   weekStart,
+  periodLabel,
+  view,
+  hasWeekly,
+  hasMonthly,
   period,
   managerName,
   canSubmitWeb,
@@ -49,6 +54,10 @@ export default function DepartmentDashboard({
   weekSubmissions: MetricSubmission[];
   chartSubmissions: MetricSubmission[];
   weekStart: string;
+  periodLabel: string;
+  view: "weekly" | "monthly";
+  hasWeekly: boolean;
+  hasMonthly: boolean;
   period: "week" | "month" | "quarter";
   managerName: string | null;
   canSubmitWeb: boolean;
@@ -64,6 +73,12 @@ export default function DepartmentDashboard({
   function handlePeriodChange(p: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("period", p);
+    router.push(`?${params.toString()}`);
+  }
+
+  function handleViewChange(v: "weekly" | "monthly") {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", v);
     router.push(`?${params.toString()}`);
   }
 
@@ -119,9 +134,15 @@ export default function DepartmentDashboard({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <WeekSelector currentWeek={weekStart} />
+          {view === "monthly" ? (
+            <MonthSelector currentMonth={weekStart} />
+          ) : (
+            <WeekSelector currentWeek={weekStart} />
+          )}
           <a
-            href={`/api/metrics/export?department=${department.id}&week=${weekStart}`}
+            href={`/api/metrics/export?department=${department.id}&week=${
+              view === "monthly" ? formatWeekStart(getCurrentWeekStart()) : weekStart
+            }&month=${view === "monthly" ? weekStart : formatWeekStart(getCurrentMonthStart())}`}
             download
             className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:text-ink transition-colors"
           >
@@ -129,6 +150,26 @@ export default function DepartmentDashboard({
           </a>
         </div>
       </div>
+
+      {/* Weekly / monthly toggle — only shown when the department has both */}
+      {hasWeekly && hasMonthly && (
+        <div className="mb-4 flex gap-1">
+          {(["weekly", "monthly"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => handleViewChange(v)}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                view === v
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {v === "weekly" ? "Щотижневі" : "Щомісячні"}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Period toggle */}
       <div className="mb-4 flex gap-1">
@@ -242,7 +283,7 @@ export default function DepartmentDashboard({
             Динаміка: {selectedMetric.name}
           </h2>
           <p className="mb-4 text-xs text-muted">
-            {getWeekLabel(weekStart)} · {selectedMetric.unit}
+            {periodLabel} · {selectedMetric.unit}
           </p>
           <MetricChart
             metric={selectedMetric}
@@ -256,7 +297,7 @@ export default function DepartmentDashboard({
       {canSubmitWeb && (
         <div className="rounded-xl border border-border bg-surface p-6">
           <h2 className="mb-4 text-sm font-semibold text-ink">
-            Внести показники за {getWeekLabel(weekStart)}
+            Внести показники за {periodLabel}
           </h2>
           <form onSubmit={handleWebSubmit} className="flex flex-col gap-4">
             {metrics.map((def) => {

@@ -7,6 +7,7 @@ import {
   formatDeviation,
   formatWeekStart,
   getCurrentWeekStart,
+  getCurrentMonthStart,
 } from "@/lib/metrics/status";
 import type { MetricDefinition, MetricSubmission, Department } from "@/types/database";
 
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const deptId = searchParams.get("department");
   const weekStart = searchParams.get("week") ?? formatWeekStart(getCurrentWeekStart());
+  const monthStart = searchParams.get("month") ?? formatWeekStart(getCurrentMonthStart());
 
   const supabase = await createClient();
 
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
       supabase
         .from("metric_submissions")
         .select("*")
-        .eq("week_start", weekStart),
+        .in("week_start", [weekStart, monthStart]),
     ]);
 
   const defs = (metrics ?? []) as MetricDefinition[];
@@ -50,6 +52,7 @@ export async function GET(req: NextRequest) {
     { header: "Відділ", key: "dept", width: 20 },
     { header: "Метрика", key: "name", width: 35 },
     { header: "Тип", key: "type", width: 12 },
+    { header: "Частота", key: "frequency", width: 14 },
     { header: "План", key: "plan", width: 14 },
     { header: "Факт", key: "fact", width: 14 },
     { header: "Відхилення", key: "deviation", width: 18 },
@@ -77,15 +80,24 @@ export async function GET(req: NextRequest) {
     not_submitted: "Не здано",
   };
 
+  const frequencyLabels: Record<string, string> = {
+    weekly: "Щотижнева",
+    monthly: "Щомісячна",
+  };
+
   for (const def of defs) {
     const dept = depts.find((d) => d.id === def.department_id);
-    const sub = subs.find((s) => s.metric_definition_id === def.id);
+    const periodStart = def.frequency === "monthly" ? monthStart : weekStart;
+    const sub = subs.find(
+      (s) => s.metric_definition_id === def.id && s.week_start === periodStart
+    );
     const status = calcStatus(def, sub?.value ?? null);
 
     const row = sheet.addRow({
       dept: dept?.name ?? "—",
       name: def.name,
       type: typeLabels[def.type] ?? def.type,
+      frequency: frequencyLabels[def.frequency] ?? def.frequency,
       plan:
         def.type === "range"
           ? `${def.range_min ?? "?"}–${def.range_max ?? "?"} ${def.unit}`

@@ -3,6 +3,7 @@ export type MetricType = "growing" | "declining" | "range";
 export type ValueType = "percent" | "number" | "boolean";
 export type SubmissionSource = "telegram" | "web";
 export type MetricStatus = "normal" | "warning" | "critical" | "not_submitted";
+export type MetricFrequency = "weekly" | "monthly";
 
 export interface Database {
   public: {
@@ -87,6 +88,7 @@ export interface Database {
           critical_threshold: number;
           is_active: boolean;
           sort_order: number;
+          frequency: MetricFrequency;
           created_at: string;
         };
         Insert: {
@@ -104,6 +106,7 @@ export interface Database {
           critical_threshold?: number;
           is_active?: boolean;
           sort_order?: number;
+          frequency?: MetricFrequency;
         };
         Update: Partial<{
           name: string;
@@ -118,6 +121,7 @@ export interface Database {
           critical_threshold: number;
           is_active: boolean;
           sort_order: number;
+          frequency: MetricFrequency;
         }>;
         Relationships: [
           {
@@ -133,6 +137,7 @@ export interface Database {
           id: string;
           profile_id: string;
           metric_definition_id: string;
+          /** Period start: Monday for weekly metrics, 1st-of-month for monthly metrics (see metric_definitions.frequency). */
           week_start: string;
           value: number;
           comment: string | null;
@@ -193,6 +198,34 @@ export interface Database {
           accepted_at: string | null;
         }>;
         Relationships: [];
+      };
+      profile_metric_access: {
+        Row: {
+          profile_id: string;
+          metric_definition_id: string;
+        };
+        Insert: {
+          profile_id: string;
+          metric_definition_id: string;
+        };
+        Update: Partial<{
+          profile_id: string;
+          metric_definition_id: string;
+        }>;
+        Relationships: [
+          {
+            foreignKeyName: "profile_metric_access_profile_id_fkey";
+            columns: ["profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profile_metric_access_metric_definition_id_fkey";
+            columns: ["metric_definition_id"];
+            referencedRelation: "metric_definitions";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
   };

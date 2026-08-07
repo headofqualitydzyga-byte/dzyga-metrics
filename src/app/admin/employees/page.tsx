@@ -9,7 +9,7 @@ export default async function EmployeesPage() {
 
   const supabase = await createClient();
 
-  const [{ data: profiles }, { data: departments }, { data: invitations }] =
+  const [{ data: profiles }, { data: departments }, { data: invitations }, { data: allMetrics }] =
     await Promise.all([
       supabase.from("profiles").select("*, departments(name)").order("created_at"),
       supabase.from("departments").select("id, name").order("sort_order"),
@@ -17,6 +17,11 @@ export default async function EmployeesPage() {
         .from("invitations")
         .select("*, departments(name)")
         .order("created_at", { ascending: false }),
+      supabase
+        .from("metric_definitions")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order"),
     ]);
 
   return (
@@ -31,6 +36,7 @@ export default async function EmployeesPage() {
         profiles={profiles ?? []}
         departments={departments ?? []}
         invitations={invitations ?? []}
+        allMetrics={allMetrics ?? []}
       />
     </div>
   );

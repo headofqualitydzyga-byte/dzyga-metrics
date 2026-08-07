@@ -1,13 +1,143 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS } from "@/lib/roles";
-import type { Invitation, Profile, UserRole } from "@/types/database";
+import type { Invitation, MetricDefinition, Profile, UserRole } from "@/types/database";
 
 type ProfileWithDept = Profile & { departments: { name: string } | null };
 type InvitationWithDept = Invitation & { departments: { name: string } | null };
+
+function MetricAccessModal({
+  profile,
+  allMetrics,
+  departments,
+  onSave,
+  onClose,
+}: {
+  profile: ProfileWithDept;
+  allMetrics: MetricDefinition[];
+  departments: { id: string; name: string }[];
+  onSave: (metricIds: string[]) => Promise<void>;
+  onClose: () => void;
+}) {
+  const supabase = createClient();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("profile_metric_access")
+      .select("metric_definition_id")
+      .eq("profile_id", profile.id)
+      .then(({ data }: { data: Array<{ metric_definition_id: string }> | null }) => {
+        setSelected(new Set((data ?? []).map((r) => r.metric_definition_id)));
+        setLoaded(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id]);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(Array.from(selected));
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-surface p-6 shadow-xl">
+        <h2 className="mb-1 text-base font-semibold text-ink">
+          Доступ до метрик — {profile.full_name ?? profile.email}
+        </h2>
+        <p className="mb-4 text-xs text-muted">
+          Без жодної позначки співробітник не бачить жодної метрики.
+        </p>
+        <div className="flex-1 overflow-y-auto">
+          {!loaded ? (
+            <p className="text-sm text-muted">Завантаження...</p>
+          ) : (
+            departments.map((dept) => {
+              const deptMetrics = allMetrics.filter((m) => m.department_id === dept.id);
+              if (!deptMetrics.length) return null;
+              const weekly = deptMetrics.filter((m) => m.frequency === "weekly");
+              const monthly = deptMetrics.filter((m) => m.frequency === "monthly");
+              return (
+                <div key={dept.id} className="mb-4">
+                  <h3 className="mb-2 text-sm font-semibold text-ink">{dept.name}</h3>
+                  {weekly.length > 0 && (
+                    <div className="mb-2">
+                      <p className="mb-1 text-xs font-medium text-muted">Щотижневі</p>
+                      {weekly.map((m) => (
+                        <label
+                          key={m.id}
+                          className="flex items-center gap-2 py-1 text-sm text-ink"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(m.id)}
+                            onChange={() => toggle(m.id)}
+                          />
+                          {m.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {monthly.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-xs font-medium text-muted">Щомісячні</p>
+                      {monthly.map((m) => (
+                        <label
+                          key={m.id}
+                          className="flex items-center gap-2 py-1 text-sm text-ink"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(m.id)}
+                            onChange={() => toggle(m.id)}
+                          />
+                          {m.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !loaded}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50 transition-colors"
+          >
+            {saving ? "Збереження..." : "Зберегти"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-4 py-2 text-sm text-muted hover:text-ink transition-colors"
+          >
+            Скасувати
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function TelegramModal({
   profile,
@@ -281,15 +411,18 @@ export default function EmployeesClient({
   profiles: initial,
   departments,
   invitations,
+  allMetrics,
 }: {
   profiles: ProfileWithDept[];
   departments: { id: string; name: string }[];
   invitations: InvitationWithDept[];
+  allMetrics: MetricDefinition[];
 }) {
   const router = useRouter();
   const supabase = createClient();
   const [profiles, setProfiles] = useState(initial);
   const [telegramFor, setTelegramFor] = useState<ProfileWithDept | null>(null);
+  const [metricAccessFor, setMetricAccessFor] = useState<ProfileWithDept | null>(null);
 
   async function handleRoleChange(id: string, role: UserRole) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -338,6 +471,19 @@ export default function EmployeesClient({
       )
     );
     setTelegramFor(null);
+    router.refresh();
+  }
+
+  async function handleMetricAccessSave(profileId: string, metricIds: string[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = supabase as any;
+    await client.from("profile_metric_access").delete().eq("profile_id", profileId);
+    if (metricIds.length > 0) {
+      await client
+        .from("profile_metric_access")
+        .insert(metricIds.map((metricId) => ({ profile_id: profileId, metric_definition_id: metricId })));
+    }
+    setMetricAccessFor(null);
     router.refresh();
   }
 
@@ -406,13 +552,22 @@ export default function EmployeesClient({
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setTelegramFor(p)}
-                      className="text-sm text-accent hover:underline"
-                    >
-                      Telegram
-                    </button>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setMetricAccessFor(p)}
+                        className="text-sm text-accent hover:underline"
+                      >
+                        Метрики
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTelegramFor(p)}
+                        className="text-sm text-accent hover:underline"
+                      >
+                        Telegram
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -432,6 +587,16 @@ export default function EmployeesClient({
               handleTelegramSave(telegramFor.id, id, username)
             }
             onClose={() => setTelegramFor(null)}
+          />
+        )}
+
+        {metricAccessFor && (
+          <MetricAccessModal
+            profile={metricAccessFor}
+            allMetrics={allMetrics}
+            departments={departments}
+            onSave={(metricIds) => handleMetricAccessSave(metricAccessFor.id, metricIds)}
+            onClose={() => setMetricAccessFor(null)}
           />
         )}
       </div>

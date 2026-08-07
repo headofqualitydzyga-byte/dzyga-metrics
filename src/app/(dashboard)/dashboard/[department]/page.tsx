@@ -3,8 +3,12 @@ import { requireProfile, canSeeAllDepartments } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   getCurrentWeekStart,
+  getCurrentMonthStart,
+  getMonthLabel,
+  getWeekLabel,
   formatWeekStart,
 } from "@/lib/metrics/status";
+import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
 import DepartmentDashboard from "@/components/dashboard/DepartmentDashboard";
 import type { MetricDefinition, MetricSubmission } from "@/types/database";
 
@@ -13,7 +17,12 @@ export default async function DepartmentPage({
   searchParams,
 }: {
   params: Promise<{ department: string }>;
-  searchParams: Promise<{ week?: string; period?: string }>;
+  searchParams: Promise<{
+    week?: string;
+    month?: string;
+    view?: string;
+    period?: string;
+  }>;
 }) {
   const { profile } = await requireProfile();
   const { department: deptId } = await params;
@@ -28,8 +37,11 @@ export default async function DepartmentPage({
   }
 
   const weekStart = sp.week ?? formatWeekStart(getCurrentWeekStart());
+  const monthStart = sp.month ?? formatWeekStart(getCurrentMonthStart());
   const period = (sp.period as "week" | "month" | "quarter") ?? "month";
-  const cutoff = formatWeekStart(new Date(Date.now() - 24 * 7 * 24 * 60 * 60 * 1000));
+  // Widened from 24 weeks so monthly metrics (1 data point per month) have
+  // enough history for the chart's lookback toggle.
+  const cutoff = formatWeekStart(new Date(Date.now() - 52 * 7 * 24 * 60 * 60 * 1000));
 
   const supabase = await createClient();
 
@@ -55,37 +67,61 @@ export default async function DepartmentPage({
 
   if (!department) notFound();
 
-  const defs = (metricsRaw ?? []) as MetricDefinition[];
-  const metricIds = defs.map((m) => m.id);
+  let defs = (metricsRaw ?? []) as MetricDefinition[];
 
-  const [{ data: weekSubsRaw }, { data: chartSubsRaw }] = await Promise.all([
-    metricIds.length
+  if (profile.role !== "admin") {
+    const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
+    defs = filterByAccess(defs, profile.role, accessibleIds);
+  }
+
+  const weeklyDefs = defs.filter((d) => d.frequency === "weekly");
+  const monthlyDefs = defs.filter((d) => d.frequency === "monthly");
+  const hasWeekly = weeklyDefs.length > 0;
+  const hasMonthly = monthlyDefs.length > 0;
+
+  const view: "weekly" | "monthly" =
+    sp.view === "monthly" || (!hasWeekly && hasMonthly) ? "monthly" : "weekly";
+
+  const activeMetrics = view === "monthly" ? monthlyDefs : weeklyDefs;
+  const activePeriodStart = view === "monthly" ? monthStart : weekStart;
+  const activeMetricIds = activeMetrics.map((m) => m.id);
+
+  const [{ data: periodSubsRaw }, { data: chartSubsRaw }] = await Promise.all([
+    activeMetricIds.length
       ? supabase
           .from("metric_submissions")
           .select("*")
-          .eq("week_start", weekStart)
-          .in("metric_definition_id", metricIds)
+          .eq("week_start", activePeriodStart)
+          .in("metric_definition_id", activeMetricIds)
       : Promise.resolve({ data: [] }),
-    metricIds.length
+    activeMetricIds.length
       ? supabase
           .from("metric_submissions")
           .select("*")
           .gte("week_start", cutoff)
-          .in("metric_definition_id", metricIds)
+          .in("metric_definition_id", activeMetricIds)
           .order("week_start")
       : Promise.resolve({ data: [] }),
   ]);
 
-  const weekSubs = (weekSubsRaw ?? []) as MetricSubmission[];
+  const periodSubs = (periodSubsRaw ?? []) as MetricSubmission[];
   const chartSubs = (chartSubsRaw ?? []) as MetricSubmission[];
+
+  const periodLabel =
+    view === "monthly" ? getMonthLabel(activePeriodStart) : getWeekLabel(activePeriodStart);
 
   return (
     <DepartmentDashboard
+      key={view}
       department={department}
-      metrics={defs}
-      weekSubmissions={weekSubs}
+      metrics={activeMetrics}
+      weekSubmissions={periodSubs}
       chartSubmissions={chartSubs}
-      weekStart={weekStart}
+      weekStart={activePeriodStart}
+      periodLabel={periodLabel}
+      view={view}
+      hasWeekly={hasWeekly}
+      hasMonthly={hasMonthly}
       period={period}
       managerName={
         (managerProfile as { full_name: string | null; email: string } | null)?.full_name ??
