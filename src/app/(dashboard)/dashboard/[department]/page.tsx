@@ -129,7 +129,9 @@ export default async function DepartmentPage({
         null
       }
       canSubmitWeb={
-        profile.role === "manager" && profile.department_id === deptId
+        (profile.role === "manager" && profile.department_id === deptId) ||
+        profile.role === "admin" ||
+        (profile.role === "viewer" && activeMetrics.length > 0)
       }
     />
   );
