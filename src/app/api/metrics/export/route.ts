@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
     { header: "Метрика", key: "name", width: 35 },
     { header: "Тип", key: "type", width: 12 },
     { header: "Частота", key: "frequency", width: 14 },
+    { header: "Напрямок", key: "businessLine", width: 14 },
     { header: "План", key: "plan", width: 14 },
     { header: "Факт", key: "fact", width: 14 },
     { header: "Відхилення", key: "deviation", width: 18 },
@@ -85,6 +86,11 @@ export async function GET(req: NextRequest) {
     monthly: "Щомісячна",
   };
 
+  const businessLineLabels: Record<string, string> = {
+    catering: "Кейтеринг",
+    boxes: "Бокси",
+  };
+
   for (const def of defs) {
     const dept = depts.find((d) => d.id === def.department_id);
     const periodStart = def.frequency === "monthly" ? monthStart : weekStart;
@@ -98,6 +104,7 @@ export async function GET(req: NextRequest) {
       name: def.name,
       type: typeLabels[def.type] ?? def.type,
       frequency: frequencyLabels[def.frequency] ?? def.frequency,
+      businessLine: businessLineLabels[def.business_line] ?? def.business_line,
       plan:
         def.type === "range"
           ? `${def.range_min ?? "?"}–${def.range_max ?? "?"} ${def.unit}`

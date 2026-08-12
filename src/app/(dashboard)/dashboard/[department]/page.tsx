@@ -21,6 +21,7 @@ export default async function DepartmentPage({
     week?: string;
     month?: string;
     view?: string;
+    line?: string;
     period?: string;
   }>;
 }) {
@@ -74,8 +75,14 @@ export default async function DepartmentPage({
     defs = filterByAccess(defs, profile.role, accessibleIds);
   }
 
-  const weeklyDefs = defs.filter((d) => d.frequency === "weekly");
-  const monthlyDefs = defs.filter((d) => d.frequency === "monthly");
+  const hasCatering = defs.some((d) => d.business_line === "catering");
+  const hasBoxes = defs.some((d) => d.business_line === "boxes");
+  const line: "catering" | "boxes" | "all" =
+    sp.line === "catering" || sp.line === "boxes" ? sp.line : "all";
+  const lineDefs = line === "all" ? defs : defs.filter((d) => d.business_line === line);
+
+  const weeklyDefs = lineDefs.filter((d) => d.frequency === "weekly");
+  const monthlyDefs = lineDefs.filter((d) => d.frequency === "monthly");
   const hasWeekly = weeklyDefs.length > 0;
   const hasMonthly = monthlyDefs.length > 0;
 
@@ -112,7 +119,7 @@ export default async function DepartmentPage({
 
   return (
     <DepartmentDashboard
-      key={view}
+      key={`${view}-${line}`}
       department={department}
       metrics={activeMetrics}
       weekSubmissions={periodSubs}
@@ -122,6 +129,9 @@ export default async function DepartmentPage({
       view={view}
       hasWeekly={hasWeekly}
       hasMonthly={hasMonthly}
+      line={line}
+      hasCatering={hasCatering}
+      hasBoxes={hasBoxes}
       period={period}
       managerName={
         (managerProfile as { full_name: string | null; email: string } | null)?.full_name ??

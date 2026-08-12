@@ -18,7 +18,7 @@ import type { Department, MetricDefinition, MetricSubmission } from "@/types/dat
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; month?: string; view?: string }>;
+  searchParams: Promise<{ week?: string; month?: string; view?: string; line?: string }>;
 }) {
   const { profile } = await requireProfile();
   const params = await searchParams;
@@ -62,7 +62,13 @@ export default async function DashboardPage({
     defs = filterByAccess(defs, profile.role, accessibleIds);
   }
 
-  const activeDefs = defs.filter((d) => d.frequency === view);
+  const hasCatering = defs.some((d) => d.business_line === "catering");
+  const hasBoxes = defs.some((d) => d.business_line === "boxes");
+  const line: "catering" | "boxes" | "all" =
+    params.line === "catering" || params.line === "boxes" ? params.line : "all";
+  const lineDefs = line === "all" ? defs : defs.filter((d) => d.business_line === line);
+
+  const activeDefs = lineDefs.filter((d) => d.frequency === view);
   const activeMetricIds = activeDefs.map((d) => d.id);
 
   const { data: submissions } = activeMetricIds.length
@@ -108,12 +114,13 @@ export default async function DashboardPage({
       </div>
 
       {/* Weekly / monthly toggle */}
-      <div className="mb-6 flex gap-1">
+      <div className="mb-4 flex gap-1">
         {(["weekly", "monthly"] as const).map((v) => {
           const qs = new URLSearchParams();
           qs.set("view", v);
           qs.set("week", weekStart);
           qs.set("month", monthStart);
+          qs.set("line", line);
           return (
             <a
               key={v}
@@ -129,6 +136,32 @@ export default async function DashboardPage({
           );
         })}
       </div>
+
+      {/* Catering / boxes toggle — only shown when there's a mix */}
+      {hasCatering && hasBoxes && (
+        <div className="mb-6 flex gap-1">
+          {(["all", "catering", "boxes"] as const).map((l) => {
+            const qs = new URLSearchParams();
+            qs.set("view", view);
+            qs.set("week", weekStart);
+            qs.set("month", monthStart);
+            qs.set("line", l);
+            return (
+              <a
+                key={l}
+                href={`?${qs.toString()}`}
+                className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  line === l
+                    ? "bg-accent text-white"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                {l === "all" ? "Усі" : l === "catering" ? "Кейтеринг" : "Бокси"}
+              </a>
+            );
+          })}
+        </div>
+      )}
 
       {/* Summary bar */}
       <div className="mb-6 grid grid-cols-4 gap-3">
@@ -161,6 +194,7 @@ export default async function DashboardPage({
               weekStart={weekStart}
               monthStart={monthStart}
               view={view}
+              line={line}
             />
           );
         })}

@@ -48,6 +48,13 @@ export function frequencyPickerKeyboard(): InlineKeyboard {
     .text("🗓️ Місячні метрики", "freq:monthly");
 }
 
+export function businessLinePickerKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("🍽️ Кейтеринг", "line:catering")
+    .row()
+    .text("📦 Бокси", "line:boxes");
+}
+
 export function confirmKeyboard(weekStart: string): InlineKeyboard {
   return new InlineKeyboard()
     .text("✅ Підтвердити і зберегти", `confirm:${weekStart}`)

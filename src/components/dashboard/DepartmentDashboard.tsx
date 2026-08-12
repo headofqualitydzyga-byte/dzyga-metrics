@@ -45,6 +45,9 @@ export default function DepartmentDashboard({
   view,
   hasWeekly,
   hasMonthly,
+  line,
+  hasCatering,
+  hasBoxes,
   period,
   managerName,
   canSubmitWeb,
@@ -58,6 +61,9 @@ export default function DepartmentDashboard({
   view: "weekly" | "monthly";
   hasWeekly: boolean;
   hasMonthly: boolean;
+  line: "catering" | "boxes" | "all";
+  hasCatering: boolean;
+  hasBoxes: boolean;
   period: "week" | "month" | "quarter";
   managerName: string | null;
   canSubmitWeb: boolean;
@@ -79,6 +85,12 @@ export default function DepartmentDashboard({
   function handleViewChange(v: "weekly" | "monthly") {
     const params = new URLSearchParams(searchParams.toString());
     params.set("view", v);
+    router.push(`?${params.toString()}`);
+  }
+
+  function handleLineChange(l: "catering" | "boxes" | "all") {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("line", l);
     router.push(`?${params.toString()}`);
   }
 
@@ -166,6 +178,26 @@ export default function DepartmentDashboard({
               }`}
             >
               {v === "weekly" ? "Щотижневі" : "Щомісячні"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Catering / boxes toggle — only shown when the department has both */}
+      {hasCatering && hasBoxes && (
+        <div className="mb-4 flex gap-1">
+          {(["all", "catering", "boxes"] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => handleLineChange(l)}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                line === l
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {l === "all" ? "Усі" : l === "catering" ? "Кейтеринг" : "Бокси"}
             </button>
           ))}
         </div>

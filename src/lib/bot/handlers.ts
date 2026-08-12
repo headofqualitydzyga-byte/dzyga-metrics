@@ -14,16 +14,23 @@ import {
   weekPickerKeyboard,
   monthPickerKeyboard,
   frequencyPickerKeyboard,
+  businessLinePickerKeyboard,
   booleanKeyboard,
   metricPickerKeyboard,
 } from "./keyboards";
-import type { MetricDefinition } from "@/types/database";
+import type { BusinessLine, MetricDefinition } from "@/types/database";
+
+const LINE_LABELS: Record<BusinessLine, string> = {
+  catering: "🍽️ Кейтеринг",
+  boxes: "📦 Бокси",
+};
 
 interface SubmitSession {
   // Generic active period key: a Monday for a weekly flow, 1st-of-month
   // for a monthly flow — see `frequency` for which one it currently is.
   weekStart?: string;
   frequency?: "weekly" | "monthly";
+  businessLine?: BusinessLine;
   allMetrics?: MetricDefinition[];
   metrics?: MetricDefinition[];
   values?: Record<string, number>;
@@ -162,9 +169,6 @@ export function createBot(token: string) {
       week_start: string;
     }>;
 
-    const weekly = metrics.filter((m) => m.frequency === "weekly");
-    const monthly = metrics.filter((m) => m.frequency === "monthly");
-
     const renderGroup = (defs: MetricDefinition[], periodStart: string) =>
       defs
         .map((m) => {
@@ -176,12 +180,24 @@ export function createBot(token: string) {
         })
         .join("\n");
 
+    const renderByLine = (freqMetrics: MetricDefinition[], periodStart: string) => {
+      const catering = freqMetrics.filter((m) => m.business_line === "catering");
+      const boxes = freqMetrics.filter((m) => m.business_line === "boxes");
+      const sections: string[] = [];
+      if (catering.length) sections.push(`${LINE_LABELS.catering}:\n${renderGroup(catering, periodStart)}`);
+      if (boxes.length) sections.push(`${LINE_LABELS.boxes}:\n${renderGroup(boxes, periodStart)}`);
+      return sections.join("\n\n");
+    };
+
+    const weekly = metrics.filter((m) => m.frequency === "weekly");
+    const monthly = metrics.filter((m) => m.frequency === "monthly");
+
     const parts: string[] = [];
     if (weekly.length) {
-      parts.push(`📆 *Тижневі (${getWeekLabel(weekStart)}):*\n${renderGroup(weekly, weekStart)}`);
+      parts.push(`📆 *Тижневі (${getWeekLabel(weekStart)}):*\n\n${renderByLine(weekly, weekStart)}`);
     }
     if (monthly.length) {
-      parts.push(`🗓️ *Місячні (${getMonthLabel(monthStart)}):*\n${renderGroup(monthly, monthStart)}`);
+      parts.push(`🗓️ *Місячні (${getMonthLabel(monthStart)}):*\n\n${renderByLine(monthly, monthStart)}`);
     }
 
     await ctx.reply(`📊 *Статус:*\n\n${parts.join("\n\n")}`, { parse_mode: "Markdown" });
@@ -234,39 +250,31 @@ export function createBot(token: string) {
       await ctx.reply("Тижневі чи місячні метрики вводимо?", {
         reply_markup: frequencyPickerKeyboard(),
       });
-    } else if (weekly.length) {
-      ctx.session.frequency = "weekly";
-      ctx.session.metrics = weekly;
-      await ctx.reply("📅 За який тиждень вводимо метрики?", {
-        reply_markup: weekPickerKeyboard(),
-      });
-    } else {
-      ctx.session.frequency = "monthly";
-      ctx.session.metrics = monthly;
-      await ctx.reply("🗓️ За який місяць вводимо метрики?", {
-        reply_markup: monthPickerKeyboard(),
-      });
+      return;
     }
+
+    ctx.session.frequency = weekly.length ? "weekly" : "monthly";
+    await promptBusinessLineOrPeriod(ctx, { edit: false });
   });
 
   // Frequency choice callback (only shown when both kinds are available)
   bot.callbackQuery(/^freq:(weekly|monthly)$/, async (ctx) => {
     const frequency = ctx.match[1] as "weekly" | "monthly";
     ctx.session.frequency = frequency;
+    await ctx.answerCallbackQuery();
+    await promptBusinessLineOrPeriod(ctx, { edit: true });
+  });
+
+  // Business-line choice callback (only shown when both kinds are available)
+  bot.callbackQuery(/^line:(catering|boxes)$/, async (ctx) => {
+    const businessLine = ctx.match[1] as BusinessLine;
+    const frequency = ctx.session.frequency ?? "weekly";
+    ctx.session.businessLine = businessLine;
     ctx.session.metrics = (ctx.session.allMetrics ?? []).filter(
-      (m) => m.frequency === frequency
+      (m) => m.frequency === frequency && m.business_line === businessLine
     );
     await ctx.answerCallbackQuery();
-
-    if (frequency === "monthly") {
-      await ctx.editMessageText("🗓️ За який місяць вводимо метрики?", {
-        reply_markup: monthPickerKeyboard(),
-      });
-    } else {
-      await ctx.editMessageText("📅 За який тиждень вводимо метрики?", {
-        reply_markup: weekPickerKeyboard(),
-      });
-    }
+    await promptPeriod(ctx, { edit: true });
   });
 
   // Period picker callback (week or month) — loads already-saved values,
@@ -373,6 +381,7 @@ export function createBot(token: string) {
 
     const metrics = ctx.session.metrics ?? [];
     const frequency = ctx.session.frequency ?? "weekly";
+    const businessLine = ctx.session.businessLine;
 
     const upserts = Object.entries(values).map(([metricId, value]) => ({
       profile_id: profile.id,
@@ -404,8 +413,9 @@ export function createBot(token: string) {
       .map((m) => `• ${m.name}: ${values[m.id]} ${m.unit}`)
       .join("\n");
 
+    const lineLabel = businessLine ? ` · ${LINE_LABELS[businessLine]}` : "";
     await ctx.editMessageText(
-      `✅ *Збережено за ${getPeriodLabel(frequency, weekStart)}!*\n\n${summary}`,
+      `✅ *Збережено за ${getPeriodLabel(frequency, weekStart)}${lineLabel}!*\n\n${summary}`,
       { parse_mode: "Markdown" }
     );
 
@@ -473,6 +483,40 @@ export function createBot(token: string) {
   return bot;
 }
 
+// After frequency is resolved: narrow to that frequency's metrics, and if
+// they span both business lines, ask which one; otherwise skip straight to
+// the period picker.
+async function promptBusinessLineOrPeriod(ctx: MyContext, opts: { edit: boolean }) {
+  const frequency = ctx.session.frequency ?? "weekly";
+  const freqMetrics = (ctx.session.allMetrics ?? []).filter((m) => m.frequency === frequency);
+  const catering = freqMetrics.filter((m) => m.business_line === "catering");
+  const boxes = freqMetrics.filter((m) => m.business_line === "boxes");
+
+  if (catering.length && boxes.length) {
+    const text = "Кейтеринг чи Бокси?";
+    const kb = businessLinePickerKeyboard();
+    if (opts.edit) await ctx.editMessageText(text, { reply_markup: kb });
+    else await ctx.reply(text, { reply_markup: kb });
+    return;
+  }
+
+  ctx.session.businessLine = catering.length ? "catering" : "boxes";
+  ctx.session.metrics = freqMetrics;
+  await promptPeriod(ctx, opts);
+}
+
+async function promptPeriod(ctx: MyContext, opts: { edit: boolean }) {
+  const frequency = ctx.session.frequency ?? "weekly";
+  const text =
+    frequency === "monthly"
+      ? "🗓️ За який місяць вводимо метрики?"
+      : "📅 За який тиждень вводимо метрики?";
+  const kb = frequency === "monthly" ? monthPickerKeyboard() : weekPickerKeyboard();
+
+  if (opts.edit) await ctx.editMessageText(text, { reply_markup: kb });
+  else await ctx.reply(text, { reply_markup: kb });
+}
+
 async function showMetricPicker(ctx: MyContext, opts: { edit: boolean }) {
   const metrics = ctx.session.metrics ?? [];
   const frequency = ctx.session.frequency ?? "weekly";
@@ -482,8 +526,9 @@ async function showMetricPicker(ctx: MyContext, opts: { edit: boolean }) {
   const answeredIds = new Set([...Object.keys(values), ...Object.keys(existing)]);
 
   const periodIcon = frequency === "monthly" ? "🗓️ Місяць" : "📅 Тиждень";
+  const lineLabel = ctx.session.businessLine ? ` · ${LINE_LABELS[ctx.session.businessLine]}` : "";
   const text =
-    `${periodIcon}: ${getPeriodLabel(frequency, weekStart)}\n\n` +
+    `${periodIcon}: ${getPeriodLabel(frequency, weekStart)}${lineLabel}\n\n` +
     `Оберіть метрику для введення (${answeredIds.size}/${metrics.length} заповнено):`;
 
   const kb = metricPickerKeyboard(metrics, answeredIds, weekStart);

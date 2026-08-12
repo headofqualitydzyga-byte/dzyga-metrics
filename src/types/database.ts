@@ -4,6 +4,7 @@ export type ValueType = "percent" | "number" | "boolean";
 export type SubmissionSource = "telegram" | "web";
 export type MetricStatus = "normal" | "warning" | "critical" | "not_submitted";
 export type MetricFrequency = "weekly" | "monthly";
+export type BusinessLine = "catering" | "boxes";
 
 export interface Database {
   public: {
@@ -89,6 +90,7 @@ export interface Database {
           is_active: boolean;
           sort_order: number;
           frequency: MetricFrequency;
+          business_line: BusinessLine;
           created_at: string;
         };
         Insert: {
@@ -107,6 +109,7 @@ export interface Database {
           is_active?: boolean;
           sort_order?: number;
           frequency?: MetricFrequency;
+          business_line?: BusinessLine;
         };
         Update: Partial<{
           name: string;
@@ -121,6 +124,7 @@ export interface Database {
           critical_threshold: number;
           is_active: boolean;
           sort_order: number;
+          business_line: BusinessLine;
           frequency: MetricFrequency;
         }>;
         Relationships: [

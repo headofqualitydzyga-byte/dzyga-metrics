@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type {
+  BusinessLine,
   MetricDefinition,
   MetricFrequency,
   MetricType,
@@ -27,14 +28,21 @@ const FREQUENCY_LABELS: Record<MetricFrequency, string> = {
   monthly: "Щомісячна",
 };
 
+const BUSINESS_LINE_LABELS: Record<BusinessLine, string> = {
+  catering: "Кейтеринг",
+  boxes: "Бокси",
+};
+
 function MetricForm({
   initial,
   departmentId,
+  defaultSortOrder,
   onSave,
   onCancel,
 }: {
   initial?: Partial<MetricDefinition>;
   departmentId: string;
+  defaultSortOrder: number;
   onSave: (data: Partial<MetricDefinition>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -46,6 +54,9 @@ function MetricForm({
   );
   const [frequency, setFrequency] = useState<MetricFrequency>(
     initial?.frequency ?? "weekly"
+  );
+  const [businessLine, setBusinessLine] = useState<BusinessLine>(
+    initial?.business_line ?? "catering"
   );
   const [unit, setUnit] = useState(initial?.unit ?? "%");
   const [planValue, setPlanValue] = useState(
@@ -62,6 +73,9 @@ function MetricForm({
   );
   const [criticalThreshold, setCriticalThreshold] = useState(
     initial?.critical_threshold?.toString() ?? "20"
+  );
+  const [sortOrder, setSortOrder] = useState(
+    (initial?.sort_order ?? defaultSortOrder).toString()
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,12 +96,14 @@ function MetricForm({
         type,
         value_type: valueType,
         frequency,
+        business_line: businessLine,
         unit: unit.trim() || "%",
         plan_value: planValue ? parseFloat(planValue) : null,
         range_min: rangeMin ? parseFloat(rangeMin) : null,
         range_max: rangeMax ? parseFloat(rangeMax) : null,
         warning_threshold: parseFloat(warningThreshold) || 10,
         critical_threshold: parseFloat(criticalThreshold) || 20,
+        sort_order: parseInt(sortOrder, 10) || defaultSortOrder,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Помилка збереження");
@@ -125,7 +141,7 @@ function MetricForm({
       </div>
       {field("Опис", description, setDescription, "text", "Необов'язково")}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-ink">
             Тип метрики
@@ -174,6 +190,22 @@ function MetricForm({
             ))}
           </select>
         </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-ink">
+            Напрямок
+          </label>
+          <select
+            value={businessLine}
+            onChange={(e) => setBusinessLine(e.target.value as BusinessLine)}
+            className="w-full rounded-lg border border-border bg-page px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+          >
+            {Object.entries(BUSINESS_LINE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {type !== "range" ? (
@@ -185,9 +217,10 @@ function MetricForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {field("Поріг Увага (% відхилення)", warningThreshold, setWarningThreshold, "number", "10")}
         {field("Поріг Критично (% відхилення)", criticalThreshold, setCriticalThreshold, "number", "20")}
+        {field("Порядковий номер", sortOrder, setSortOrder, "number", "1")}
       </div>
 
       {error && (
@@ -245,6 +278,7 @@ export default function MetricsClient({
         type: data.type,
         value_type: data.value_type,
         frequency: data.frequency,
+        business_line: data.business_line,
         unit: data.unit,
         plan_value: data.plan_value,
         range_min: data.range_min,
@@ -253,7 +287,9 @@ export default function MetricsClient({
         critical_threshold: data.critical_threshold,
         is_active: data.is_active ?? true,
         department_id: deptId,
-        sort_order: metrics.filter((m) => m.department_id === deptId).length + 1,
+        sort_order:
+          data.sort_order ??
+          metrics.filter((m) => m.department_id === deptId).length + 1,
       })
       .select()
       .single();
@@ -273,12 +309,14 @@ export default function MetricsClient({
         type: data.type,
         value_type: data.value_type,
         frequency: data.frequency,
+        business_line: data.business_line,
         unit: data.unit,
         plan_value: data.plan_value,
         range_min: data.range_min,
         range_max: data.range_max,
         warning_threshold: data.warning_threshold,
         critical_threshold: data.critical_threshold,
+        sort_order: data.sort_order,
       })
       .eq("id", id)
       .select()
@@ -355,10 +393,12 @@ export default function MetricsClient({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-page">
+              <th className="px-4 py-3 text-left font-medium text-muted">№</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Метрика</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Відділ</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Тип</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Частота</th>
+              <th className="px-4 py-3 text-left font-medium text-muted">Напрямок</th>
               <th className="px-4 py-3 text-left font-medium text-muted">План</th>
               <th className="px-4 py-3 text-left font-medium text-muted">Статус</th>
               <th className="px-4 py-3" />
@@ -372,6 +412,7 @@ export default function MetricsClient({
                     !m.is_active ? "opacity-50" : ""
                   }`}
                 >
+                  <td className="px-4 py-3 text-muted">{m.sort_order}</td>
                   <td className="px-4 py-3 font-medium text-ink">{m.name}</td>
                   <td className="px-4 py-3">
                     <span
@@ -383,6 +424,7 @@ export default function MetricsClient({
                   </td>
                   <td className="px-4 py-3 text-muted">{TYPE_LABELS[m.type]}</td>
                   <td className="px-4 py-3 text-muted">{FREQUENCY_LABELS[m.frequency]}</td>
+                  <td className="px-4 py-3 text-muted">{BUSINESS_LINE_LABELS[m.business_line]}</td>
                   <td className="px-4 py-3 text-muted">
                     {m.type === "range"
                       ? `${m.range_min ?? "?"} – ${m.range_max ?? "?"} ${m.unit}`
@@ -424,10 +466,11 @@ export default function MetricsClient({
                 </tr>
                 {editId === m.id && (
                   <tr className="border-b border-border bg-page">
-                    <td colSpan={7} className="px-4 py-4">
+                    <td colSpan={9} className="px-4 py-4">
                       <MetricForm
                         initial={m}
                         departmentId={m.department_id}
+                        defaultSortOrder={m.sort_order}
                         onSave={(data) => handleEdit(m.id, data)}
                         onCancel={() => setEditId(null)}
                       />
@@ -468,6 +511,9 @@ export default function MetricsClient({
           </h2>
           <MetricForm
             departmentId={adding}
+            defaultSortOrder={
+              metrics.filter((m) => m.department_id === adding).length + 1
+            }
             onSave={(data) => handleAdd(adding, data)}
             onCancel={() => setAdding(null)}
           />
