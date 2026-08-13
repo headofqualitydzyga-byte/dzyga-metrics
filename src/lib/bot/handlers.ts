@@ -17,6 +17,9 @@ import {
   businessLinePickerKeyboard,
   booleanKeyboard,
   metricPickerKeyboard,
+  planFrequencyPickerKeyboard,
+  planBooleanKeyboard,
+  planMetricPickerKeyboard,
 } from "./keyboards";
 import type { BusinessLine, MetricDefinition } from "@/types/database";
 
@@ -36,6 +39,14 @@ interface SubmitSession {
   values?: Record<string, number>;
   existing?: Record<string, number>;
   awaitingValue?: string | null;
+
+  // /planvalues flow (recurring plan-value entry, separate from the above
+  // actual-value submission flow — driven by a single designated plan-setter).
+  planAllMetrics?: MetricDefinition[];
+  planFrequency?: "weekly" | "monthly";
+  planMetrics?: MetricDefinition[];
+  planValues?: Record<string, number>;
+  planAwaiting?: string | null;
 }
 
 type MyContext = Context & SessionFlavor<SubmitSession>;
@@ -257,6 +268,134 @@ export function createBot(token: string) {
     await promptBusinessLineOrPeriod(ctx, { edit: false });
   });
 
+  // /planvalues — restricted to the designated plan-setter (PLAN_SETTER_TELEGRAM_ID)
+  bot.command("planvalues", async (ctx) => {
+    const telegramId = String(ctx.from?.id);
+    if (
+      !process.env.PLAN_SETTER_TELEGRAM_ID ||
+      telegramId !== process.env.PLAN_SETTER_TELEGRAM_ID
+    ) {
+      await ctx.reply("Ця команда недоступна.");
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const { data: defsRaw } = await supabase
+      .from("metric_definitions")
+      .select("*")
+      .eq("plan_recurring", true)
+      .eq("is_active", true)
+      .order("sort_order");
+
+    const metrics = (defsRaw ?? []) as MetricDefinition[];
+    if (!metrics.length) {
+      await ctx.reply("Немає метрик з автооновленням планових значень.");
+      return;
+    }
+
+    ctx.session.planAllMetrics = metrics;
+    ctx.session.planValues = {};
+    ctx.session.planAwaiting = null;
+
+    const weekly = metrics.filter((m) => m.frequency === "weekly");
+    const monthly = metrics.filter((m) => m.frequency === "monthly");
+
+    if (weekly.length && monthly.length) {
+      await ctx.reply("Тижневі чи місячні планові значення вводимо?", {
+        reply_markup: planFrequencyPickerKeyboard(),
+      });
+      return;
+    }
+
+    ctx.session.planFrequency = weekly.length ? "weekly" : "monthly";
+    ctx.session.planMetrics = weekly.length ? weekly : monthly;
+    await showPlanPicker(ctx, { edit: false });
+  });
+
+  // Plan frequency choice callback (only shown when both kinds are pending)
+  bot.callbackQuery(/^planfreq:(weekly|monthly)$/, async (ctx) => {
+    const frequency = ctx.match[1] as "weekly" | "monthly";
+    ctx.session.planFrequency = frequency;
+    ctx.session.planMetrics = (ctx.session.planAllMetrics ?? []).filter(
+      (m) => m.frequency === frequency
+    );
+    await ctx.answerCallbackQuery();
+    await showPlanPicker(ctx, { edit: true });
+  });
+
+  // Plan metric picker: plan-setter chose which metric's plan value to enter
+  bot.callbackQuery(/^planpick:(.+)$/, async (ctx) => {
+    const metricId = ctx.match[1];
+    const metric = ctx.session.planMetrics?.find((m) => m.id === metricId);
+    if (!metric) {
+      await ctx.answerCallbackQuery("Метрику не знайдено");
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    if (metric.value_type === "boolean") {
+      await ctx.editMessageText(`*${metric.name}*\n\nПланове значення: Так?`, {
+        parse_mode: "Markdown",
+        reply_markup: planBooleanKeyboard(metric.id),
+      });
+    } else {
+      ctx.session.planAwaiting = metricId;
+      const current = ctx.session.planValues?.[metricId] ?? metric.plan_value ?? undefined;
+      await ctx.editMessageText(
+        `*${metric.name}*\n\nВведіть нове планове значення (${metric.unit})` +
+          (current !== undefined ? `\nПоточне: ${current}` : ""),
+        { parse_mode: "Markdown" }
+      );
+    }
+  });
+
+  // Plan boolean answer callback
+  bot.callbackQuery(/^planbool:([^:]+):(\d+)$/, async (ctx) => {
+    const [, metricId, valueStr] = ctx.match;
+    const value = parseInt(valueStr);
+    ctx.session.planValues = { ...(ctx.session.planValues ?? {}), [metricId]: value };
+    await ctx.answerCallbackQuery(value === 100 ? "✅ Записано: Так" : "❌ Записано: Ні");
+    await showPlanPicker(ctx, { edit: true });
+  });
+
+  // Plan confirm callback: writes accumulated plan values onto metric_definitions
+  bot.callbackQuery("planconfirm", async (ctx) => {
+    const values = ctx.session.planValues ?? {};
+
+    if (Object.keys(values).length === 0) {
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText("Немає нових значень для збереження.");
+      ctx.session = {};
+      return;
+    }
+
+    await ctx.answerCallbackQuery("Зберігаємо...");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const now = new Date().toISOString();
+
+    for (const [metricId, value] of Object.entries(values)) {
+      await supabase
+        .from("metric_definitions")
+        .update({ plan_value: value, plan_value_updated_at: now })
+        .eq("id", metricId);
+    }
+
+    const metrics = ctx.session.planMetrics ?? [];
+    const summary = metrics
+      .filter((m) => values[m.id] !== undefined)
+      .map((m) => `• ${m.name}: ${values[m.id]} ${m.unit}`)
+      .join("\n");
+
+    await ctx.editMessageText(`✅ *Планові значення оновлено!*\n\n${summary}`, {
+      parse_mode: "Markdown",
+    });
+
+    ctx.session = {};
+  });
+
   // Frequency choice callback (only shown when both kinds are available)
   bot.callbackQuery(/^freq:(weekly|monthly)$/, async (ctx) => {
     const frequency = ctx.match[1] as "weekly" | "monthly";
@@ -457,6 +596,29 @@ export function createBot(token: string) {
 
   // Text message handler (for numeric input)
   bot.on("message:text", async (ctx) => {
+    const planMetricId = ctx.session.planAwaiting;
+    if (planMetricId) {
+      const metric = ctx.session.planMetrics?.find((m) => m.id === planMetricId);
+      if (!metric) {
+        ctx.session.planAwaiting = null;
+        return;
+      }
+
+      const value = parseFloat(ctx.message.text.replace(",", "."));
+      if (isNaN(value)) {
+        await ctx.reply(
+          `Введіть числове значення для "${metric.name}" (${metric.unit}):`
+        );
+        return;
+      }
+
+      ctx.session.planValues = { ...(ctx.session.planValues ?? {}), [planMetricId]: value };
+      ctx.session.planAwaiting = null;
+      await ctx.reply(`Записано: ${value} ${metric.unit}`);
+      await showPlanPicker(ctx, { edit: false });
+      return;
+    }
+
     const metricId = ctx.session.awaitingValue;
     if (!metricId) return;
 
@@ -532,6 +694,40 @@ async function showMetricPicker(ctx: MyContext, opts: { edit: boolean }) {
     `Оберіть метрику для введення (${answeredIds.size}/${metrics.length} заповнено):`;
 
   const kb = metricPickerKeyboard(metrics, answeredIds, weekStart);
+
+  if (opts.edit) {
+    await ctx.editMessageText(text, { reply_markup: kb });
+  } else {
+    await ctx.reply(text, { reply_markup: kb });
+  }
+}
+
+// Marks a plan_recurring metric as already handled for the current period
+// if it was either updated in this chat session or has a fresh-enough
+// plan_value_updated_at from an earlier /planvalues run this period.
+async function showPlanPicker(ctx: MyContext, opts: { edit: boolean }) {
+  const metrics = ctx.session.planMetrics ?? [];
+  const frequency = ctx.session.planFrequency ?? "weekly";
+  const values = ctx.session.planValues ?? {};
+  const periodStart =
+    frequency === "monthly" ? getCurrentMonthStart() : getCurrentWeekStart();
+
+  const answeredIds = new Set(
+    metrics
+      .filter(
+        (m) =>
+          values[m.id] !== undefined ||
+          (m.plan_value_updated_at && new Date(m.plan_value_updated_at) >= periodStart)
+      )
+      .map((m) => m.id)
+  );
+
+  const periodIcon = frequency === "monthly" ? "🗓️ Місячні" : "📅 Тижневі";
+  const text =
+    `${periodIcon} планові значення\n\n` +
+    `Оберіть метрику, щоб внести планове значення (${answeredIds.size}/${metrics.length} оновлено):`;
+
+  const kb = planMetricPickerKeyboard(metrics, answeredIds);
 
   if (opts.edit) {
     await ctx.editMessageText(text, { reply_markup: kb });

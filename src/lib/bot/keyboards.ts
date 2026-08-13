@@ -84,3 +84,32 @@ export function metricPickerKeyboard(
   kb.text("❌ Скасувати", "cancel");
   return kb;
 }
+
+export function planFrequencyPickerKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("📆 Тижневі планові значення", "planfreq:weekly")
+    .row()
+    .text("🗓️ Місячні планові значення", "planfreq:monthly");
+}
+
+export function planBooleanKeyboard(metricId: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ Так", `planbool:${metricId}:100`)
+    .text("❌ Ні", `planbool:${metricId}:0`);
+}
+
+export function planMetricPickerKeyboard(
+  metrics: MetricDefinition[],
+  answeredIds: Set<string>
+): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const m of metrics) {
+    const icon = answeredIds.has(m.id) ? "✅" : "⬜";
+    kb.text(`${icon} ${m.name}`, `planpick:${m.id}`).row();
+  }
+  if (answeredIds.size > 0) {
+    kb.text("💾 Зберегти", "planconfirm").row();
+  }
+  kb.text("❌ Скасувати", "cancel");
+  return kb;
+}

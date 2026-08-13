@@ -91,6 +91,8 @@ export interface Database {
           sort_order: number;
           frequency: MetricFrequency;
           business_line: BusinessLine;
+          plan_recurring: boolean;
+          plan_value_updated_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -110,6 +112,8 @@ export interface Database {
           sort_order?: number;
           frequency?: MetricFrequency;
           business_line?: BusinessLine;
+          plan_recurring?: boolean;
+          plan_value_updated_at?: string | null;
         };
         Update: Partial<{
           name: string;
@@ -126,6 +130,8 @@ export interface Database {
           sort_order: number;
           business_line: BusinessLine;
           frequency: MetricFrequency;
+          plan_recurring: boolean;
+          plan_value_updated_at: string | null;
         }>;
         Relationships: [
           {

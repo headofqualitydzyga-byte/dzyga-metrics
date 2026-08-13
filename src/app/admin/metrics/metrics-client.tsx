@@ -77,6 +77,9 @@ function MetricForm({
   const [sortOrder, setSortOrder] = useState(
     (initial?.sort_order ?? defaultSortOrder).toString()
   );
+  const [planRecurring, setPlanRecurring] = useState(
+    initial?.plan_recurring ?? false
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +107,7 @@ function MetricForm({
         warning_threshold: parseFloat(warningThreshold) || 10,
         critical_threshold: parseFloat(criticalThreshold) || 20,
         sort_order: parseInt(sortOrder, 10) || defaultSortOrder,
+        plan_recurring: type !== "range" && planRecurring,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Помилка збереження");
@@ -209,7 +213,20 @@ function MetricForm({
       </div>
 
       {type !== "range" ? (
-        field("Планове значення", planValue, setPlanValue, "number", "напр. 100")
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {field("Планове значення", planValue, setPlanValue, "number", "напр. 100")}
+          <label className="flex items-center gap-2 self-end pb-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={planRecurring}
+              onChange={(e) => setPlanRecurring(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            {frequency === "monthly"
+              ? "Оновлювати планове значення щомісяця"
+              : "Оновлювати планове значення щотижня"}
+          </label>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
           {field("Мінімум (нижня межа)", rangeMin, setRangeMin, "number", "напр. 28")}
@@ -290,6 +307,7 @@ export default function MetricsClient({
         sort_order:
           data.sort_order ??
           metrics.filter((m) => m.department_id === deptId).length + 1,
+        plan_recurring: data.plan_recurring ?? false,
       })
       .select()
       .single();
@@ -317,6 +335,7 @@ export default function MetricsClient({
         warning_threshold: data.warning_threshold,
         critical_threshold: data.critical_threshold,
         sort_order: data.sort_order,
+        plan_recurring: data.plan_recurring ?? false,
       })
       .eq("id", id)
       .select()
@@ -431,6 +450,18 @@ export default function MetricsClient({
                       : m.plan_value != null
                       ? `${m.plan_value} ${m.unit}`
                       : "—"}
+                    {m.plan_recurring && (
+                      <span
+                        title={
+                          m.frequency === "monthly"
+                            ? "Оновлюється щомісяця"
+                            : "Оновлюється щотижня"
+                        }
+                      >
+                        {" "}
+                        🔄
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <button
