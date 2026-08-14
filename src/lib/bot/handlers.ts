@@ -28,6 +28,15 @@ const LINE_LABELS: Record<BusinessLine, string> = {
   boxes: "📦 Бокси",
 };
 
+// PLAN_SETTER_TELEGRAM_ID may hold multiple comma-separated IDs (e.g. the
+// COO plus an admin testing the flow).
+export function getPlanSetterIds(): string[] {
+  return (process.env.PLAN_SETTER_TELEGRAM_ID ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 interface SubmitSession {
   // Generic active period key: a Monday for a weekly flow, 1st-of-month
   // for a monthly flow — see `frequency` for which one it currently is.
@@ -271,10 +280,7 @@ export function createBot(token: string) {
   // /planvalues — restricted to the designated plan-setter (PLAN_SETTER_TELEGRAM_ID)
   bot.command("planvalues", async (ctx) => {
     const telegramId = String(ctx.from?.id);
-    if (
-      !process.env.PLAN_SETTER_TELEGRAM_ID ||
-      telegramId !== process.env.PLAN_SETTER_TELEGRAM_ID
-    ) {
+    if (!getPlanSetterIds().includes(telegramId)) {
       await ctx.reply("Ця команда недоступна.");
       return;
     }

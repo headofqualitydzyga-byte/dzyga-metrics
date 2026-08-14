@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getCurrentWeekStart, getCurrentMonthStart, getWeekLabel, formatWeekStart } from "@/lib/metrics/status";
+import { getPlanSetterIds } from "@/lib/bot/handlers";
 import type { MetricDefinition } from "@/types/database";
 
 // This route is only ever triggered on a Monday (see vercel.json), so a
@@ -18,9 +19,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const planSetterId = process.env.PLAN_SETTER_TELEGRAM_ID;
+  const planSetterIds = getPlanSetterIds();
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!planSetterId || !botToken) {
+  if (!planSetterIds.length || !botToken) {
     return NextResponse.json({ ok: true, skipped: "PLAN_SETTER_TELEGRAM_ID or TELEGRAM_BOT_TOKEN not set" });
   }
 
@@ -74,11 +75,13 @@ export async function GET(req: Request) {
     `${sections}\n\n` +
     `Введіть /planvalues щоб внести планові значення.`;
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: planSetterId, text, parse_mode: "Markdown" }),
-  });
+  for (const planSetterId of planSetterIds) {
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: planSetterId, text, parse_mode: "Markdown" }),
+    });
+  }
 
-  return NextResponse.json({ ok: true, notified: pending.length });
+  return NextResponse.json({ ok: true, notified: pending.length, recipients: planSetterIds.length });
 }
