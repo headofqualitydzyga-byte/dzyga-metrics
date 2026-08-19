@@ -6,19 +6,22 @@ import {
   STATUS_DOT,
 } from "@/lib/metrics/status";
 import DeptIcon from "@/components/DeptIcon";
-import type { Department, MetricDefinition } from "@/types/database";
+import MetricSparkline from "./MetricSparkline";
+import type { Department, MetricDefinition, MetricSubmission } from "@/types/database";
 
 export default function OcDepartmentCard({
   department,
   metrics,
   current,
   prior,
+  chartByMetric,
   responsibleName,
 }: {
   department: Department;
   metrics: MetricDefinition[];
   current: Map<string, number>;
   prior: Map<string, number>;
+  chartByMetric: Map<string, MetricSubmission[]>;
   responsibleName: string | null;
 }) {
   return (
@@ -88,6 +91,9 @@ export default function OcDepartmentCard({
                     </div>
                   </>
                 )}
+                <div className="mt-1 flex justify-end">
+                  <MetricSparkline metric={def} submissions={chartByMetric.get(def.id) ?? []} />
+                </div>
               </div>
             );
           })}

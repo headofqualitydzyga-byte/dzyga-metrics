@@ -1,14 +1,17 @@
 import { formatMetricValue, getTrend } from "@/lib/metrics/status";
-import type { MetricDefinition } from "@/types/database";
+import MetricSparkline from "./MetricSparkline";
+import type { MetricDefinition, MetricSubmission } from "@/types/database";
 
 export default function OcTopRow({
   metrics,
   current,
   prior,
+  chartByMetric,
 }: {
   metrics: MetricDefinition[];
   current: Map<string, number>;
   prior: Map<string, number>;
+  chartByMetric: Map<string, MetricSubmission[]>;
 }) {
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -31,6 +34,7 @@ export default function OcTopRow({
                 {trend.arrow} {trend.label}
               </p>
             )}
+            <MetricSparkline metric={def} submissions={chartByMetric.get(def.id) ?? []} />
           </div>
         );
       })}

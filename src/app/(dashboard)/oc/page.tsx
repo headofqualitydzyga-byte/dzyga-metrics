@@ -10,11 +10,20 @@ import {
 import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
 import OcTopRow from "@/components/oc/OcTopRow";
 import OcDepartmentCard from "@/components/oc/OcDepartmentCard";
+import OcPeriodFilter from "@/components/oc/OcPeriodFilter";
 import type { Department, MetricDefinition, MetricSubmission, Profile } from "@/types/database";
 
-export default async function OcPage() {
+export default async function OcPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const { profile } = await requireProfile();
   if (!canSeeAllDepartments(profile.role)) redirect("/dashboard");
+
+  const sp = await searchParams;
+  const period: "week" | "month" | "quarter" =
+    sp.period === "week" || sp.period === "quarter" ? sp.period : "month";
 
   const supabase = await createClient();
 
@@ -73,6 +82,31 @@ export default async function OcPage() {
     if (priorSub) prior.set(def.id, priorSub.value);
   }
 
+  // Sparkline lookback window — same weeks-back scale as MetricChart, just
+  // rendered compact instead of a full axis/legend chart.
+  const weeksBack = period === "week" ? 8 : period === "month" ? 16 : 24;
+  const cutoff = formatWeekStart(
+    new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000)
+  );
+
+  const { data: chartSubsRaw } = defIds.length
+    ? await supabase
+        .from("metric_submissions")
+        .select("*")
+        .in("metric_definition_id", defIds)
+        .gte("week_start", cutoff)
+        .order("week_start")
+    : { data: [] };
+  const chartSubs = (chartSubsRaw ?? []) as MetricSubmission[];
+
+  const chartByMetric = new Map<string, MetricSubmission[]>();
+  for (const def of defs) {
+    chartByMetric.set(
+      def.id,
+      chartSubs.filter((s) => s.metric_definition_id === def.id)
+    );
+  }
+
   const featured = defs.filter((d) => d.oc_featured);
 
   return (
@@ -84,8 +118,15 @@ export default async function OcPage() {
         </p>
       </div>
 
+      <OcPeriodFilter period={period} />
+
       {featured.length > 0 && (
-        <OcTopRow metrics={featured} current={current} prior={prior} />
+        <OcTopRow
+          metrics={featured}
+          current={current}
+          prior={prior}
+          chartByMetric={chartByMetric}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -96,6 +137,7 @@ export default async function OcPage() {
             metrics={defs.filter((d) => d.department_id === dept.id)}
             current={current}
             prior={prior}
+            chartByMetric={chartByMetric}
             responsibleName={responsibleByDept.get(dept.id) ?? null}
           />
         ))}
