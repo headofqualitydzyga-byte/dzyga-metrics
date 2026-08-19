@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
-  getCurrentWeekStart,
+  getPreviousWeekStart,
   getCurrentMonthStart,
   formatWeekStart,
   getWeekLabel,
   getMonthLabel,
 } from "@/lib/metrics/status";
 import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
+import { isKyivHour } from "@/lib/cron-time";
 import type { MetricDefinition } from "@/types/database";
 
 // Every month has exactly one Monday in its final 7 days.
@@ -25,16 +26,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = createAdminClient();
-
   const now = new Date();
+  // The cron fires twice on Monday (see vercel.json) to cover both sides of
+  // Kyiv's DST shift — only the firing that actually lands at 9am Kyiv acts.
+  if (!isKyivHour(now, 9)) {
+    return NextResponse.json({ ok: true, skipped: "not 9am Kyiv" });
+  }
+
+  const supabase = createAdminClient();
   const isLastMonday = isLastMondayOfMonth(now);
 
-  // Last week (the one that just ended)
-  const currentWeek = getCurrentWeekStart();
-  const lastWeek = new Date(currentWeek);
-  lastWeek.setDate(lastWeek.getDate() - 7);
-  const weekStart = formatWeekStart(lastWeek);
+  const weekStart = formatWeekStart(getPreviousWeekStart());
   const monthStart = formatWeekStart(getCurrentMonthStart());
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;

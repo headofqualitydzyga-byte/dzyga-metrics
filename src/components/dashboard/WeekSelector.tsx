@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { getCurrentWeekStart, formatWeekStart, getWeekLabel } from "@/lib/metrics/status";
+import { getPreviousWeekStart, formatWeekStart, getWeekLabel } from "@/lib/metrics/status";
 
+// Starts from the last completed week, not the in-progress current one —
+// metrics are reported for the week that just ended.
 function getRecentWeeks(count = 8): string[] {
   const weeks: string[] = [];
-  const current = getCurrentWeekStart();
+  const previous = getPreviousWeekStart();
   for (let i = 0; i < count; i++) {
-    const d = new Date(current);
+    const d = new Date(previous);
     d.setDate(d.getDate() - i * 7);
     weeks.push(formatWeekStart(d));
   }

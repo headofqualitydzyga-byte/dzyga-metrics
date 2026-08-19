@@ -120,6 +120,15 @@ export function getCurrentWeekStart(): Date {
   return monday;
 }
 
+// The week managers should currently be reporting on: the one that just
+// finished, not the in-progress current week. Used as the default entry
+// point for /submit and the web dashboard.
+export function getPreviousWeekStart(): Date {
+  const prev = getCurrentWeekStart();
+  prev.setDate(prev.getDate() - 7);
+  return prev;
+}
+
 export function formatWeekStart(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

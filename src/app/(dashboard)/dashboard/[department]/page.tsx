@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireProfile, canSeeAllDepartments } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
-  getCurrentWeekStart,
+  getPreviousWeekStart,
   getCurrentMonthStart,
   getMonthLabel,
   getWeekLabel,
@@ -37,7 +37,7 @@ export default async function DepartmentPage({
     }
   }
 
-  const weekStart = sp.week ?? formatWeekStart(getCurrentWeekStart());
+  const weekStart = sp.week ?? formatWeekStart(getPreviousWeekStart());
   const monthStart = sp.month ?? formatWeekStart(getCurrentMonthStart());
   const period = (sp.period as "week" | "month" | "quarter") ?? "month";
   // Widened from 24 weeks so monthly metrics (1 data point per month) have

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getCurrentWeekStart, getCurrentMonthStart, getWeekLabel, formatWeekStart } from "@/lib/metrics/status";
 import { getPlanSetterIds } from "@/lib/bot/handlers";
+import { isKyivHour } from "@/lib/cron-time";
 import type { MetricDefinition } from "@/types/database";
 
 // This route is only ever triggered on a Monday (see vercel.json), so a
@@ -17,6 +18,12 @@ export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // The cron fires twice on Monday (see vercel.json) to cover both sides of
+  // Kyiv's DST shift — only the firing that actually lands at 9am Kyiv acts.
+  if (!isKyivHour(new Date(), 9)) {
+    return NextResponse.json({ ok: true, skipped: "not 9am Kyiv" });
   }
 
   const planSetterIds = getPlanSetterIds();

@@ -2,21 +2,23 @@ import { InlineKeyboard } from "grammy";
 import {
   getWeekLabel,
   getMonthLabel,
-  getCurrentWeekStart,
+  getPreviousWeekStart,
   getCurrentMonthStart,
   formatWeekStart,
 } from "@/lib/metrics/status";
 import type { MetricDefinition } from "@/types/database";
 
+// Starts from the last completed week (metrics are reported for the week
+// that just ended, not the in-progress current one).
 export function weekPickerKeyboard(): InlineKeyboard {
   const kb = new InlineKeyboard();
-  const current = getCurrentWeekStart();
-  const currentStr = formatWeekStart(current);
+  const previous = getPreviousWeekStart();
+  const previousStr = formatWeekStart(previous);
 
-  kb.text(`📅 Поточний (${getWeekLabel(currentStr)})`, `week:${currentStr}`).row();
+  kb.text(`📅 Минулий тиждень (${getWeekLabel(previousStr)})`, `week:${previousStr}`).row();
 
   for (let i = 1; i <= 4; i++) {
-    const d = new Date(current);
+    const d = new Date(previous);
     d.setDate(d.getDate() - i * 7);
     const str = formatWeekStart(d);
     kb.text(getWeekLabel(str), `week:${str}`).row();

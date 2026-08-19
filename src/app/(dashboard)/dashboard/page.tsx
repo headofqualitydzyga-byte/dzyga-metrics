@@ -3,7 +3,7 @@ import { requireProfile, canSeeAllDepartments } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   calcStatus,
-  getCurrentWeekStart,
+  getPreviousWeekStart,
   getCurrentMonthStart,
   formatWeekStart,
   getWeekLabel,
@@ -38,7 +38,7 @@ export default async function DashboardPage({
     }
   }
 
-  const weekStart = params.week ?? formatWeekStart(getCurrentWeekStart());
+  const weekStart = params.week ?? formatWeekStart(getPreviousWeekStart());
   const monthStart = params.month ?? formatWeekStart(getCurrentMonthStart());
   const view: "weekly" | "monthly" = params.view === "monthly" ? "monthly" : "weekly";
   const activePeriodStart = view === "monthly" ? monthStart : weekStart;

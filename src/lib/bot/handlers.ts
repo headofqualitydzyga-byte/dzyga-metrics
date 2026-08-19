@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import {
   calcStatus,
   getCurrentWeekStart,
+  getPreviousWeekStart,
   getCurrentMonthStart,
   formatWeekStart,
   getWeekLabel,
@@ -174,7 +175,7 @@ export function createBot(token: string) {
       return;
     }
 
-    const weekStart = formatWeekStart(getCurrentWeekStart());
+    const weekStart = formatWeekStart(getPreviousWeekStart());
     const monthStart = formatWeekStart(getCurrentMonthStart());
 
     const { data: subsRaw } = await supabase
@@ -688,7 +689,7 @@ async function promptPeriod(ctx: MyContext, opts: { edit: boolean }) {
 async function showMetricPicker(ctx: MyContext, opts: { edit: boolean }) {
   const metrics = ctx.session.metrics ?? [];
   const frequency = ctx.session.frequency ?? "weekly";
-  const weekStart = ctx.session.weekStart ?? formatWeekStart(getCurrentWeekStart());
+  const weekStart = ctx.session.weekStart ?? formatWeekStart(getPreviousWeekStart());
   const values = ctx.session.values ?? {};
   const existing = ctx.session.existing ?? {};
   const answeredIds = new Set([...Object.keys(values), ...Object.keys(existing)]);
