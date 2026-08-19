@@ -1,4 +1,18 @@
-import type { MetricDefinition, MetricStatus } from "@/types/database";
+import type { MetricDefinition, MetricFrequency, MetricStatus } from "@/types/database";
+
+export const STATUS_DOT: Record<MetricStatus, string> = {
+  normal: "bg-status-normal",
+  warning: "bg-status-warning",
+  critical: "bg-status-critical",
+  not_submitted: "bg-border",
+};
+
+export const STATUS_LABEL: Record<MetricStatus, string> = {
+  normal: "Норма",
+  warning: "Увага",
+  critical: "Критично",
+  not_submitted: "Не здано",
+};
 
 export function calcStatus(
   def: MetricDefinition,
@@ -169,4 +183,59 @@ export function getPeriodLabel(
   periodStart: string
 ): string {
   return frequency === "monthly" ? getMonthLabel(periodStart) : getWeekLabel(periodStart);
+}
+
+export function formatMetricValue(
+  def: MetricDefinition,
+  value: number | null
+): string {
+  if (value === null) return "—";
+  if (def.value_type === "boolean") return value > 0 ? "Так" : "Ні";
+  return `${value} ${def.unit}`;
+}
+
+export interface MetricTrend {
+  arrow: "↑" | "↓" | "→";
+  colorClass: string;
+  label: string;
+}
+
+// Compares a metric's current-period value against its prior period (see
+// getPriorPeriodStart) — the Operations Center's stand-in for a real
+// day-over-day trend, which the app doesn't have data to compute.
+export function getTrend(
+  def: MetricDefinition,
+  current: number | null,
+  prior: number | null
+): MetricTrend | null {
+  if (current === null || prior === null) return null;
+  const delta = current - prior;
+  if (delta === 0) return { arrow: "→", colorClass: "text-muted", label: "без змін" };
+
+  const arrow = delta > 0 ? "↑" : "↓";
+  const improving = def.type === "declining" ? delta < 0 : delta > 0;
+  const colorClass =
+    def.type === "range" ? "text-muted" : improving ? "text-status-normal" : "text-status-critical";
+  const sign = delta > 0 ? "+" : "";
+  const label =
+    def.value_type === "percent"
+      ? `${sign}${delta.toFixed(1)} п.п.`
+      : `${sign}${delta.toFixed(1)} ${def.unit}`;
+
+  return { arrow, colorClass, label };
+}
+
+// The period immediately before periodStart, for the same frequency — used
+// to compute the Operations Center's "vs prior period" trend (there's no
+// daily data to compare "vs yesterday" against, see getPreviousWeekStart).
+export function getPriorPeriodStart(
+  frequency: MetricFrequency,
+  periodStart: string
+): string {
+  const d = new Date(periodStart);
+  if (frequency === "monthly") {
+    return formatWeekStart(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  }
+  d.setDate(d.getDate() - 7);
+  return formatWeekStart(d);
 }

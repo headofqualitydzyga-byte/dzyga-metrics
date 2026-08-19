@@ -80,6 +80,8 @@ function MetricForm({
   const [planRecurring, setPlanRecurring] = useState(
     initial?.plan_recurring ?? false
   );
+  const [showInOc, setShowInOc] = useState(initial?.show_in_oc ?? false);
+  const [ocFeatured, setOcFeatured] = useState(initial?.oc_featured ?? false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +110,8 @@ function MetricForm({
         critical_threshold: parseFloat(criticalThreshold) || 20,
         sort_order: parseInt(sortOrder, 10) || defaultSortOrder,
         plan_recurring: type !== "range" && planRecurring,
+        show_in_oc: showInOc,
+        oc_featured: showInOc && ocFeatured,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Помилка збереження");
@@ -240,6 +244,31 @@ function MetricForm({
         {field("Порядковий номер", sortOrder, setSortOrder, "number", "1")}
       </div>
 
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={showInOc}
+            onChange={(e) => {
+              setShowInOc(e.target.checked);
+              if (!e.target.checked) setOcFeatured(false);
+            }}
+            className="h-4 w-4 rounded border-border"
+          />
+          Показувати в Операційному центрі
+        </label>
+        <label className="flex items-center gap-2 pl-6 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={ocFeatured}
+            disabled={!showInOc}
+            onChange={(e) => setOcFeatured(e.target.checked)}
+            className="h-4 w-4 rounded border-border disabled:opacity-40"
+          />
+          Виводити у верхній блок (ключові показники)
+        </label>
+      </div>
+
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
           {error}
@@ -308,6 +337,8 @@ export default function MetricsClient({
           data.sort_order ??
           metrics.filter((m) => m.department_id === deptId).length + 1,
         plan_recurring: data.plan_recurring ?? false,
+        show_in_oc: data.show_in_oc ?? false,
+        oc_featured: data.oc_featured ?? false,
       })
       .select()
       .single();
@@ -336,6 +367,8 @@ export default function MetricsClient({
         critical_threshold: data.critical_threshold,
         sort_order: data.sort_order,
         plan_recurring: data.plan_recurring ?? false,
+        show_in_oc: data.show_in_oc ?? false,
+        oc_featured: data.oc_featured ?? false,
       })
       .eq("id", id)
       .select()
@@ -432,7 +465,14 @@ export default function MetricsClient({
                   }`}
                 >
                   <td className="px-4 py-3 text-muted">{m.sort_order}</td>
-                  <td className="px-4 py-3 font-medium text-ink">{m.name}</td>
+                  <td className="px-4 py-3 font-medium text-ink">
+                    {m.name}
+                    {m.show_in_oc && (
+                      <span title="Показується в Операційному центрі" className="ml-1">
+                        🎯
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-white"

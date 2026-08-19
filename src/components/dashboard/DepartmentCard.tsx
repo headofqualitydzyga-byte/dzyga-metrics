@@ -3,23 +3,11 @@ import {
   calcStatus,
   getChartIcon,
   formatDeviation,
+  STATUS_DOT,
+  STATUS_LABEL,
 } from "@/lib/metrics/status";
 import DeptIcon from "@/components/DeptIcon";
 import type { Department, MetricDefinition, MetricSubmission } from "@/types/database";
-
-const STATUS_DOT: Record<string, string> = {
-  normal: "bg-status-normal",
-  warning: "bg-status-warning",
-  critical: "bg-status-critical",
-  not_submitted: "bg-border",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  normal: "Норма",
-  warning: "Увага",
-  critical: "Критично",
-  not_submitted: "Не здано",
-};
 
 export default function DepartmentCard({
   department,

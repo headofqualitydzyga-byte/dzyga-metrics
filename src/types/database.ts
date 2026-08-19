@@ -93,6 +93,8 @@ export interface Database {
           business_line: BusinessLine;
           plan_recurring: boolean;
           plan_value_updated_at: string | null;
+          show_in_oc: boolean;
+          oc_featured: boolean;
           created_at: string;
         };
         Insert: {
@@ -114,6 +116,8 @@ export interface Database {
           business_line?: BusinessLine;
           plan_recurring?: boolean;
           plan_value_updated_at?: string | null;
+          show_in_oc?: boolean;
+          oc_featured?: boolean;
         };
         Update: Partial<{
           name: string;
@@ -132,6 +136,8 @@ export interface Database {
           frequency: MetricFrequency;
           plan_recurring: boolean;
           plan_value_updated_at: string | null;
+          show_in_oc: boolean;
+          oc_featured: boolean;
         }>;
         Relationships: [
           {
