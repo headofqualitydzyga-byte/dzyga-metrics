@@ -14,6 +14,15 @@ export const STATUS_LABEL: Record<MetricStatus, string> = {
   not_submitted: "Не здано",
 };
 
+// Hex equivalents of the --color-status-* CSS variables (globals.css) —
+// charts need actual color values for SVG stroke/fill, not Tailwind classes.
+export const STATUS_COLOR: Record<MetricStatus, string> = {
+  normal: "#16a34a",
+  warning: "#d97706",
+  critical: "#dc2626",
+  not_submitted: "#8993a4",
+};
+
 export function calcStatus(
   def: MetricDefinition,
   value: number | null

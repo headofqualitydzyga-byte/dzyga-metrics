@@ -120,7 +120,7 @@ export default async function DepartmentPage({
 
   return (
     <DepartmentDashboard
-      key={`${view}-${line}`}
+      key={`${view}-${line}-${activePeriodStart}`}
       department={department}
       metrics={activeMetrics}
       weekSubmissions={periodSubs}

@@ -1,4 +1,4 @@
-import { formatMetricValue, getTrend } from "@/lib/metrics/status";
+import { calcStatus, formatMetricValue, getTrend } from "@/lib/metrics/status";
 import MetricSparkline from "./MetricSparkline";
 import type { MetricDefinition, MetricSubmission } from "@/types/database";
 
@@ -19,6 +19,7 @@ export default function OcTopRow({
         const currentValue = current.get(def.id) ?? null;
         const priorValue = prior.get(def.id) ?? null;
         const trend = getTrend(def, currentValue, priorValue);
+        const status = calcStatus(def, currentValue);
 
         return (
           <div
@@ -34,7 +35,7 @@ export default function OcTopRow({
                 {trend.arrow} {trend.label}
               </p>
             )}
-            <MetricSparkline metric={def} submissions={chartByMetric.get(def.id) ?? []} />
+            <MetricSparkline submissions={chartByMetric.get(def.id) ?? []} status={status} />
           </div>
         );
       })}

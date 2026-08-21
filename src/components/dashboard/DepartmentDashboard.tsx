@@ -101,6 +101,12 @@ export default function DepartmentDashboard({
   const selectedSubs = chartSubmissions.filter(
     (s) => s.metric_definition_id === selectedMetricId
   );
+  const selectedStatus = selectedMetric
+    ? calcStatus(
+        selectedMetric,
+        weekSubmissions.find((s) => s.metric_definition_id === selectedMetricId)?.value ?? null
+      )
+    : "not_submitted";
 
   async function handleWebSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -342,6 +348,7 @@ export default function DepartmentDashboard({
             metric={selectedMetric}
             submissions={selectedSubs}
             period={period}
+            status={selectedStatus}
           />
         </div>
       )}

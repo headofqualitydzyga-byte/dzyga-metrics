@@ -1,17 +1,19 @@
 "use client";
 
+import { useId } from "react";
 import {
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
-  ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
-import type { MetricDefinition, MetricSubmission } from "@/types/database";
+import { STATUS_COLOR } from "@/lib/metrics/status";
+import type { MetricDefinition, MetricStatus, MetricSubmission } from "@/types/database";
 
 function ukMonth(dateStr: string): string {
   const months = [
@@ -26,11 +28,14 @@ export default function MetricChart({
   metric,
   submissions,
   period,
+  status,
 }: {
   metric: MetricDefinition;
   submissions: MetricSubmission[];
   period: "week" | "month" | "quarter";
+  status: MetricStatus;
 }) {
+  const gradientId = `chart-${useId().replace(/:/g, "")}`;
   const weeksBack = period === "week" ? 8 : period === "month" ? 16 : 24;
 
   const cutoff = new Date();
@@ -56,16 +61,17 @@ export default function MetricChart({
     );
   }
 
-  const factColor =
-    metric.type === "declining"
-      ? "#e5672a"
-      : metric.type === "range"
-      ? "#3b82f6"
-      : "#3b82f6";
+  const factColor = STATUS_COLOR[status];
 
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+      <ComposedChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={factColor} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={factColor} stopOpacity={0} />
+          </linearGradient>
+        </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#e6e8ec" />
         <XAxis
           dataKey="date"
@@ -92,11 +98,12 @@ export default function MetricChart({
           wrapperStyle={{ fontSize: 12, color: "#8993a4", paddingTop: 8 }}
         />
 
-        <Line
+        <Area
           type="monotone"
           dataKey="Факт"
           stroke={factColor}
           strokeWidth={2}
+          fill={`url(#${gradientId})`}
           dot={{ r: 4, fill: factColor }}
           activeDot={{ r: 6 }}
         />
@@ -136,7 +143,7 @@ export default function MetricChart({
             )}
           </>
         )}
-      </LineChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

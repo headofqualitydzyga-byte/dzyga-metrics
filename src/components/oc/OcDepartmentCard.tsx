@@ -94,7 +94,7 @@ export default function OcDepartmentCard({
                   </>
                 )}
                 <div className="mt-1 flex justify-end">
-                  <MetricSparkline metric={def} submissions={chartByMetric.get(def.id) ?? []} />
+                  <MetricSparkline submissions={chartByMetric.get(def.id) ?? []} status={status} />
                 </div>
               </div>
             );
