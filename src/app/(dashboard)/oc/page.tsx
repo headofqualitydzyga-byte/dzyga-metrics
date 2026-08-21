@@ -29,7 +29,7 @@ export default async function OcPage({
 
   const supabase = await createClient();
 
-  const [{ data: departmentsRaw }, { data: defsRaw }, { data: managersRaw }] =
+  const [{ data: departmentsRaw }, { data: defsRaw }, { data: managersRaw }, { data: allLinesRaw }] =
     await Promise.all([
       supabase.from("departments").select("*").order("sort_order"),
       supabase
@@ -38,6 +38,10 @@ export default async function OcPage({
         .eq("is_active", true)
         .eq("show_in_oc", true),
       supabase.from("profiles").select("*").eq("role", "manager"),
+      // Whether the toggle itself is worth showing shouldn't depend on which
+      // specific metrics happen to be OC-flagged yet — check every active
+      // metric in the business, same as the department dashboard does.
+      supabase.from("metric_definitions").select("business_line").eq("is_active", true),
     ]);
 
   const departments = (departmentsRaw ?? []) as Department[];
@@ -48,8 +52,9 @@ export default async function OcPage({
     defs = filterByAccess(defs, profile.role, accessibleIds);
   }
 
-  const hasCatering = defs.some((d) => d.business_line === "catering");
-  const hasBoxes = defs.some((d) => d.business_line === "boxes");
+  const allLines = (allLinesRaw ?? []) as { business_line: string }[];
+  const hasCatering = allLines.some((d) => d.business_line === "catering");
+  const hasBoxes = allLines.some((d) => d.business_line === "boxes");
   const lineDefs = line === "all" ? defs : defs.filter((d) => d.business_line === line);
 
   const managers = (managersRaw ?? []) as Profile[];
@@ -126,7 +131,8 @@ export default async function OcPage({
 
       <OcPeriodFilter period={period} />
 
-      {/* Catering / boxes toggle — only shown when the OC-flagged metrics mix both */}
+      {/* Catering / boxes toggle — shown whenever the business has both lines active,
+          independent of which specific metrics are currently OC-flagged */}
       {hasCatering && hasBoxes && (
         <div className="mb-4 flex gap-1">
           {(["all", "catering", "boxes"] as const).map((l) => {
