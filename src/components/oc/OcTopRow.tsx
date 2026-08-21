@@ -14,7 +14,10 @@ export default function OcTopRow({
   chartByMetric: Map<string, MetricSubmission[]>;
 }) {
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    // Cards size to their content (auto-fill) instead of stretching to an
+    // equal share of a fixed column count — a wide viewport with few
+    // metrics no longer leaves each card padded with dead space.
+    <div className="mb-6 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
       {metrics.map((def) => {
         const currentValue = current.get(def.id) ?? null;
         const priorValue = prior.get(def.id) ?? null;
@@ -27,15 +30,21 @@ export default function OcTopRow({
             className="rounded-xl border border-border bg-surface p-4"
           >
             <p className="truncate text-xs text-muted">{def.name}</p>
-            <p className="mt-1 text-2xl font-bold text-ink">
-              {formatMetricValue(def, currentValue)}
-            </p>
-            {trend && (
-              <p className={`mt-1 text-xs ${trend.colorClass}`}>
-                {trend.arrow} {trend.label}
-              </p>
-            )}
-            <MetricSparkline submissions={chartByMetric.get(def.id) ?? []} status={status} />
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-2xl font-bold text-ink">
+                  {formatMetricValue(def, currentValue)}
+                </p>
+                {trend && (
+                  <p className={`text-xs ${trend.colorClass}`}>
+                    {trend.arrow} {trend.label}
+                  </p>
+                )}
+              </div>
+              <div className="h-10 w-16 shrink-0">
+                <MetricSparkline submissions={chartByMetric.get(def.id) ?? []} status={status} />
+              </div>
+            </div>
           </div>
         );
       })}

@@ -66,34 +66,40 @@ export default function OcDepartmentCard({
               : null;
 
             return (
-              <div key={def.id}>
-                <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                  <span className="truncate text-muted">{def.name}</span>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="font-medium text-ink">
-                      {formatMetricValue(def, currentValue)}
-                    </span>
-                    {trend && (
-                      <span className={`text-xs ${trend.colorClass}`}>{trend.arrow}</span>
-                    )}
-                    <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
+              // Left: name/value/plan/bar, sized to its own content. Right:
+              // chart, given real width instead of being squeezed into a
+              // small corner once the left side stops stretching to fill
+              // the whole row.
+              <div key={def.id} className="flex items-center gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate text-muted">{def.name}</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="font-medium text-ink">
+                        {formatMetricValue(def, currentValue)}
+                      </span>
+                      {trend && (
+                        <span className={`text-xs ${trend.colorClass}`}>{trend.arrow}</span>
+                      )}
+                      <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
+                    </div>
                   </div>
+                  {showBar && (
+                    <>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-page">
+                        <div
+                          className={`h-full rounded-full ${STATUS_DOT[status]}`}
+                          style={{ width: `${Math.min(percent ?? 0, 100)}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 flex justify-between text-xs text-muted">
+                        <span>План: {def.plan_value} {def.unit}</span>
+                        <span>{percent}%</span>
+                      </div>
+                    </>
+                  )}
                 </div>
-                {showBar && (
-                  <>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-page">
-                      <div
-                        className={`h-full rounded-full ${STATUS_DOT[status]}`}
-                        style={{ width: `${Math.min(percent ?? 0, 100)}%` }}
-                      />
-                    </div>
-                    <div className="mt-1 flex justify-between text-xs text-muted">
-                      <span>План: {def.plan_value} {def.unit}</span>
-                      <span>{percent}%</span>
-                    </div>
-                  </>
-                )}
-                <div className="mt-1 flex justify-end">
+                <div className="h-12 w-28 shrink-0">
                   <MetricSparkline submissions={chartByMetric.get(def.id) ?? []} status={status} />
                 </div>
               </div>
