@@ -111,7 +111,7 @@ function MetricForm({
         sort_order: parseInt(sortOrder, 10) || defaultSortOrder,
         plan_recurring: type !== "range" && planRecurring,
         show_in_oc: showInOc,
-        oc_featured: showInOc && ocFeatured,
+        oc_featured: ocFeatured,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Помилка збереження");
@@ -249,21 +249,17 @@ function MetricForm({
           <input
             type="checkbox"
             checked={showInOc}
-            onChange={(e) => {
-              setShowInOc(e.target.checked);
-              if (!e.target.checked) setOcFeatured(false);
-            }}
+            onChange={(e) => setShowInOc(e.target.checked)}
             className="h-4 w-4 rounded border-border"
           />
-          Показувати в Операційному центрі
+          Показувати в Операційному центрі (картка відділу)
         </label>
-        <label className="flex items-center gap-2 pl-6 text-sm text-ink">
+        <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"
             checked={ocFeatured}
-            disabled={!showInOc}
             onChange={(e) => setOcFeatured(e.target.checked)}
-            className="h-4 w-4 rounded border-border disabled:opacity-40"
+            className="h-4 w-4 rounded border-border"
           />
           Виводити у верхній блок (ключові показники)
         </label>
@@ -470,6 +466,11 @@ export default function MetricsClient({
                     {m.show_in_oc && (
                       <span title="Показується в Операційному центрі" className="ml-1">
                         🎯
+                      </span>
+                    )}
+                    {m.oc_featured && (
+                      <span title="У верхньому блоці ОЦ" className="ml-1">
+                        ⭐
                       </span>
                     )}
                   </td>

@@ -30,11 +30,14 @@ export default async function OcPage({
   const [{ data: departmentsRaw }, { data: defsRaw }, { data: managersRaw }, { data: allLinesRaw }] =
     await Promise.all([
       supabase.from("departments").select("*").order("sort_order"),
+      // A metric can be flagged for the department grid (show_in_oc), the
+      // top summary row (oc_featured), or both — independently — so fetch
+      // anything carrying either flag.
       supabase
         .from("metric_definitions")
         .select("*")
         .eq("is_active", true)
-        .eq("show_in_oc", true),
+        .or("show_in_oc.eq.true,oc_featured.eq.true"),
       supabase.from("profiles").select("*").eq("role", "manager"),
       // Whether the toggle itself is worth showing shouldn't depend on which
       // specific metrics happen to be OC-flagged yet — check every active
@@ -178,7 +181,7 @@ export default async function OcPage({
           <OcDepartmentCard
             key={dept.id}
             department={dept}
-            metrics={lineDefs.filter((d) => d.department_id === dept.id)}
+            metrics={lineDefs.filter((d) => d.department_id === dept.id && d.show_in_oc)}
             current={current}
             prior={prior}
             chartByMetric={chartByMetric}
