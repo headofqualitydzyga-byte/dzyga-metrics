@@ -16,7 +16,7 @@ import type { Department, MetricDefinition, MetricSubmission, Profile } from "@/
 export default async function OcPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; line?: string }>;
 }) {
   const { profile } = await requireProfile();
   if (!canSeeAllDepartments(profile.role)) redirect("/dashboard");
@@ -24,6 +24,8 @@ export default async function OcPage({
   const sp = await searchParams;
   const period: "week" | "month" | "quarter" =
     sp.period === "week" || sp.period === "quarter" ? sp.period : "month";
+  const line: "catering" | "boxes" | "all" =
+    sp.line === "catering" || sp.line === "boxes" ? sp.line : "all";
 
   const supabase = await createClient();
 
@@ -45,6 +47,10 @@ export default async function OcPage({
     const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
     defs = filterByAccess(defs, profile.role, accessibleIds);
   }
+
+  const hasCatering = defs.some((d) => d.business_line === "catering");
+  const hasBoxes = defs.some((d) => d.business_line === "boxes");
+  const lineDefs = line === "all" ? defs : defs.filter((d) => d.business_line === line);
 
   const managers = (managersRaw ?? []) as Profile[];
   const responsibleByDept = new Map<string, string>();
@@ -107,7 +113,7 @@ export default async function OcPage({
     );
   }
 
-  const featured = defs.filter((d) => d.oc_featured);
+  const featured = lineDefs.filter((d) => d.oc_featured);
 
   return (
     <div>
@@ -119,6 +125,28 @@ export default async function OcPage({
       </div>
 
       <OcPeriodFilter period={period} />
+
+      {/* Catering / boxes toggle — only shown when the OC-flagged metrics mix both */}
+      {hasCatering && hasBoxes && (
+        <div className="mb-4 flex gap-1">
+          {(["all", "catering", "boxes"] as const).map((l) => {
+            const qs = new URLSearchParams();
+            qs.set("period", period);
+            qs.set("line", l);
+            return (
+              <a
+                key={l}
+                href={`?${qs.toString()}`}
+                className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  line === l ? "bg-accent text-white" : "text-muted hover:text-ink"
+                }`}
+              >
+                {l === "all" ? "Усі" : l === "catering" ? "Кейтеринг" : "Бокси"}
+              </a>
+            );
+          })}
+        </div>
+      )}
 
       {featured.length > 0 && (
         <OcTopRow
@@ -134,7 +162,7 @@ export default async function OcPage({
           <OcDepartmentCard
             key={dept.id}
             department={dept}
-            metrics={defs.filter((d) => d.department_id === dept.id)}
+            metrics={lineDefs.filter((d) => d.department_id === dept.id)}
             current={current}
             prior={prior}
             chartByMetric={chartByMetric}
