@@ -73,7 +73,7 @@ export default function OcDepartmentCard({
               <div key={def.id} className="flex items-center gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                    <span className="truncate text-muted">{def.name}</span>
+                    <span className="truncate text-muted" title={def.name}>{def.name}</span>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className="font-medium text-ink">
                         {formatMetricValue(def, currentValue)}
@@ -99,7 +99,7 @@ export default function OcDepartmentCard({
                     </>
                   )}
                 </div>
-                <div className="h-12 w-28 shrink-0">
+                <div className="h-20 w-40 shrink-0">
                   <MetricSparkline submissions={chartByMetric.get(def.id) ?? []} status={status} />
                 </div>
               </div>
