@@ -102,3 +102,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  const { profile } = await requireProfile();
+  try {
+    const body = await req.json();
+    const { metric_definition_id, week_start } = body as {
+      metric_definition_id: string;
+      week_start: string;
+    };
+
+    // Admin can clear whichever submission is actually shown for a metric,
+    // regardless of who entered it (matches admin being able to submit on
+    // any department's behalf via this same form). Everyone else can only
+    // clear their own — enforced both here and by RLS ("submissions: owner
+    // delete own"), which is what actually blocks a non-admin regular
+    // client from touching someone else's row even if this filter were
+    // ever dropped by mistake.
+    const supabase = profile.role === "admin" ? createAdminClient() : await createClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase as any)
+      .from("metric_submissions")
+      .delete()
+      .eq("metric_definition_id", metric_definition_id)
+      .eq("week_start", week_start);
+
+    if (profile.role !== "admin") {
+      query = query.eq("profile_id", profile.id);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      return NextResponse.json({ error: (error as { message: string }).message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

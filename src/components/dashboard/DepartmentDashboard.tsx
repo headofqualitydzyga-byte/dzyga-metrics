@@ -77,6 +77,7 @@ export default function DepartmentDashboard({
   );
   const [submitValues, setSubmitValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function handlePeriodChange(p: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -120,6 +121,22 @@ export default function DepartmentDashboard({
     });
 
     setSubmitting(false);
+    router.refresh();
+  }
+
+  async function handleDeleteValue(metricId: string) {
+    setDeletingId(metricId);
+    await fetch("/api/metrics/submit", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metric_definition_id: metricId, week_start: weekStart }),
+    });
+    setSubmitValues((v) => {
+      const next = { ...v };
+      delete next[metricId];
+      return next;
+    });
+    setDeletingId(null);
     router.refresh();
   }
 
@@ -398,6 +415,16 @@ export default function DepartmentDashboard({
                       }
                       className="rounded-lg border border-border bg-page px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                     />
+                  )}
+                  {existing && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteValue(def.id)}
+                      disabled={deletingId === def.id}
+                      className="justify-self-start rounded-lg border border-border px-3 py-2 text-xs text-muted transition-colors hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      {deletingId === def.id ? "Стирання..." : "🗑 Стерти значення"}
+                    </button>
                   )}
                 </div>
               );
