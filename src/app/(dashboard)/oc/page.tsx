@@ -24,8 +24,6 @@ export default async function OcPage({
   const sp = await searchParams;
   const period: "week" | "month" | "quarter" =
     sp.period === "week" || sp.period === "quarter" ? sp.period : "month";
-  const line: "catering" | "boxes" | "all" =
-    sp.line === "catering" || sp.line === "boxes" ? sp.line : "all";
 
   const supabase = await createClient();
 
@@ -55,7 +53,18 @@ export default async function OcPage({
   const allLines = (allLinesRaw ?? []) as { business_line: string }[];
   const hasCatering = allLines.some((d) => d.business_line === "catering");
   const hasBoxes = allLines.some((d) => d.business_line === "boxes");
-  const lineDefs = line === "all" ? defs : defs.filter((d) => d.business_line === line);
+  // Binary, no "all" — a business always has exactly one primary line at a
+  // time in the OC view. Falls back to whichever line actually exists if
+  // the other one is missing, so a boxes-only (or catering-only) business
+  // doesn't land on an empty default.
+  const line: "catering" | "boxes" = !hasCatering
+    ? "boxes"
+    : !hasBoxes
+      ? "catering"
+      : sp.line === "boxes"
+        ? "boxes"
+        : "catering";
+  const lineDefs = defs.filter((d) => d.business_line === line);
 
   const managers = (managersRaw ?? []) as Profile[];
   const responsibleByDept = new Map<string, string>();
@@ -131,11 +140,12 @@ export default async function OcPage({
 
       <OcPeriodFilter period={period} />
 
-      {/* Catering / boxes toggle — shown whenever the business has both lines active,
-          independent of which specific metrics are currently OC-flagged */}
+      {/* Catering / boxes toggle — binary, no "all": shown whenever the business
+          has both lines active, independent of which specific metrics are
+          currently OC-flagged */}
       {hasCatering && hasBoxes && (
         <div className="mb-4 flex gap-1">
-          {(["all", "catering", "boxes"] as const).map((l) => {
+          {(["catering", "boxes"] as const).map((l) => {
             const qs = new URLSearchParams();
             qs.set("period", period);
             qs.set("line", l);
@@ -147,7 +157,7 @@ export default async function OcPage({
                   line === l ? "bg-accent text-white" : "text-muted hover:text-ink"
                 }`}
               >
-                {l === "all" ? "Усі" : l === "catering" ? "Кейтеринг" : "Бокси"}
+                {l === "catering" ? "Кейтеринг" : "Бокси"}
               </a>
             );
           })}
@@ -173,6 +183,7 @@ export default async function OcPage({
             prior={prior}
             chartByMetric={chartByMetric}
             responsibleName={responsibleByDept.get(dept.id) ?? null}
+            line={line}
           />
         ))}
       </div>

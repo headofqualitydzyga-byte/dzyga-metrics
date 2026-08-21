@@ -48,6 +48,7 @@ export default function DepartmentDashboard({
   line,
   hasCatering,
   hasBoxes,
+  hideLineToggle,
   period,
   managerName,
   canSubmitWeb,
@@ -64,6 +65,7 @@ export default function DepartmentDashboard({
   line: "catering" | "boxes" | "all";
   hasCatering: boolean;
   hasBoxes: boolean;
+  hideLineToggle?: boolean;
   period: "week" | "month" | "quarter";
   managerName: string | null;
   canSubmitWeb: boolean;
@@ -183,8 +185,10 @@ export default function DepartmentDashboard({
         </div>
       )}
 
-      {/* Catering / boxes toggle — only shown when the department has both */}
-      {hasCatering && hasBoxes && (
+      {/* Catering / boxes toggle — only shown when the department has both,
+          and hidden when arriving from the Operations Center, which already
+          fixed the line before linking here */}
+      {hasCatering && hasBoxes && !hideLineToggle && (
         <div className="mb-4 flex gap-1">
           {(["all", "catering", "boxes"] as const).map((l) => (
             <button

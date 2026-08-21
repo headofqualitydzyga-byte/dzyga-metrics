@@ -16,6 +16,7 @@ export default function OcDepartmentCard({
   prior,
   chartByMetric,
   responsibleName,
+  line,
 }: {
   department: Department;
   metrics: MetricDefinition[];
@@ -23,10 +24,11 @@ export default function OcDepartmentCard({
   prior: Map<string, number>;
   chartByMetric: Map<string, MetricSubmission[]>;
   responsibleName: string | null;
+  line: "catering" | "boxes";
 }) {
   return (
     <Link
-      href={`/dashboard/${department.id}`}
+      href={`/dashboard/${department.id}?line=${line}&fixedLine=1`}
       className="group block rounded-xl border border-border bg-surface p-5 hover:border-accent transition-colors"
     >
       <div className="mb-4 flex items-center gap-3">

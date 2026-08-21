@@ -23,6 +23,7 @@ export default async function DepartmentPage({
     view?: string;
     line?: string;
     period?: string;
+    fixedLine?: string;
   }>;
 }) {
   const { profile } = await requireProfile();
@@ -132,6 +133,7 @@ export default async function DepartmentPage({
       line={line}
       hasCatering={hasCatering}
       hasBoxes={hasBoxes}
+      hideLineToggle={sp.fixedLine === "1"}
       period={period}
       managerName={
         (managerProfile as { full_name: string | null; email: string } | null)?.full_name ??
