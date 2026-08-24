@@ -12,6 +12,7 @@ import {
   formatWeekStart,
 } from "@/lib/metrics/status";
 import MetricChart from "./MetricChart";
+import MetricComparisonChart from "./MetricComparisonChart";
 import WeekSelector from "./WeekSelector";
 import MonthSelector from "./MonthSelector";
 import DeptIcon from "@/components/DeptIcon";
@@ -72,8 +73,8 @@ export default function DepartmentDashboard({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [selectedMetricId, setSelectedMetricId] = useState<string | null>(
-    metrics[0]?.id ?? null
+  const [selectedMetricIds, setSelectedMetricIds] = useState<Set<string>>(
+    () => new Set(metrics[0] ? [metrics[0].id] : [])
   );
   const [submitValues, setSubmitValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -97,14 +98,24 @@ export default function DepartmentDashboard({
     router.push(`?${params.toString()}`);
   }
 
-  const selectedMetric = metrics.find((m) => m.id === selectedMetricId);
-  const selectedSubs = chartSubmissions.filter(
-    (s) => s.metric_definition_id === selectedMetricId
+  function toggleMetricSelection(metricId: string) {
+    setSelectedMetricIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(metricId)) next.delete(metricId);
+      else next.add(metricId);
+      return next;
+    });
+  }
+
+  const selectedMetrics = metrics.filter((m) => selectedMetricIds.has(m.id));
+  const singleSelected = selectedMetrics.length === 1 ? selectedMetrics[0] : null;
+  const singleSelectedSubs = chartSubmissions.filter(
+    (s) => s.metric_definition_id === singleSelected?.id
   );
-  const selectedStatus = selectedMetric
+  const singleSelectedStatus = singleSelected
     ? calcStatus(
-        selectedMetric,
-        weekSubmissions.find((s) => s.metric_definition_id === selectedMetricId)?.value ?? null
+        singleSelected,
+        weekSubmissions.find((s) => s.metric_definition_id === singleSelected.id)?.value ?? null
       )
     : "not_submitted";
 
@@ -253,6 +264,7 @@ export default function DepartmentDashboard({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-page">
+              <th className="w-8 px-4 py-3" />
               <th className="px-4 py-3 text-left font-medium text-muted">Метрика</th>
               <th className="px-4 py-3 text-right font-medium text-muted">План</th>
               <th className="px-4 py-3 text-right font-medium text-muted">Факт</th>
@@ -268,18 +280,27 @@ export default function DepartmentDashboard({
               );
               const status = calcStatus(def, sub?.value ?? null);
               const rowBg = getStatusBg(status);
-              const isSelected = selectedMetricId === def.id;
+              const isSelected = selectedMetricIds.has(def.id);
 
               return (
                 <tr
                   key={def.id}
-                  onClick={() => setSelectedMetricId(def.id)}
+                  onClick={() => toggleMetricSelection(def.id)}
                   className={`border-b border-border last:border-0 cursor-pointer transition-colors ${rowBg} ${
                     isSelected
                       ? "ring-1 ring-inset ring-accent"
                       : "hover:bg-page"
                   }`}
                 >
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleMetricSelection(def.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-ink">
                     {def.name}
                   </td>
@@ -335,20 +356,37 @@ export default function DepartmentDashboard({
         )}
       </div>
 
-      {/* Chart */}
-      {selectedMetric && (
+      {/* Chart — a single ✓ shows that metric's plan/range reference lines
+          as before; ticking more than one switches to an overlay comparing
+          just their actual values (a shared plan line wouldn't mean
+          anything across metrics with different plans/units) */}
+      {singleSelected && (
         <div className="mb-6 rounded-xl border border-border bg-surface p-6">
           <h2 className="mb-1 text-sm font-semibold text-ink">
-            Динаміка: {selectedMetric.name}
+            Динаміка: {singleSelected.name}
           </h2>
           <p className="mb-4 text-xs text-muted">
-            {periodLabel} · {selectedMetric.unit}
+            {periodLabel} · {singleSelected.unit}
           </p>
           <MetricChart
-            metric={selectedMetric}
-            submissions={selectedSubs}
+            metric={singleSelected}
+            submissions={singleSelectedSubs}
             period={period}
-            status={selectedStatus}
+            status={singleSelectedStatus}
+          />
+        </div>
+      )}
+
+      {selectedMetrics.length > 1 && (
+        <div className="mb-6 rounded-xl border border-border bg-surface p-6">
+          <h2 className="mb-1 text-sm font-semibold text-ink">
+            Динаміка: порівняння ({selectedMetrics.length} метрики)
+          </h2>
+          <p className="mb-4 text-xs text-muted">{periodLabel}</p>
+          <MetricComparisonChart
+            metrics={selectedMetrics}
+            submissions={chartSubmissions}
+            period={period}
           />
         </div>
       )}
