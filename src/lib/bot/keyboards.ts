@@ -101,22 +101,20 @@ export function planBooleanKeyboard(metricId: string): InlineKeyboard {
     .text("❌ Ні", `planbool:${metricId}:0`);
 }
 
-// Plan values are forward-looking targets, so unlike weekPickerKeyboard
-// (which starts from the last completed week) this steps forward from the
-// current week — lets the plan-setter get ahead and set next week's (or a
-// few weeks out) plan value in advance.
+// Centered on the current week — plan values are usually forward-looking
+// targets, but the plan-setter can also pick a past week to backfill one
+// they missed.
 export function planWeekPickerKeyboard(): InlineKeyboard {
   const kb = new InlineKeyboard();
   const current = getCurrentWeekStart();
-  const currentStr = formatWeekStart(current);
 
-  kb.text(`📅 Поточний тиждень (${getWeekLabel(currentStr)})`, `planweek:${currentStr}`).row();
-
-  for (let i = 1; i <= 4; i++) {
+  for (let i = -3; i <= 3; i++) {
     const d = new Date(current);
     d.setDate(d.getDate() + i * 7);
     const str = formatWeekStart(d);
-    kb.text(getWeekLabel(str), `planweek:${str}`).row();
+    const label =
+      i === 0 ? `📅 Поточний тиждень (${getWeekLabel(str)})` : getWeekLabel(str);
+    kb.text(label, `planweek:${str}`).row();
   }
 
   kb.text("⬅️ Назад", "planperiodback");
@@ -126,14 +124,13 @@ export function planWeekPickerKeyboard(): InlineKeyboard {
 export function planMonthPickerKeyboard(): InlineKeyboard {
   const kb = new InlineKeyboard();
   const current = getCurrentMonthStart();
-  const currentStr = formatWeekStart(current);
 
-  kb.text(`🗓️ Поточний місяць (${getMonthLabel(currentStr)})`, `planmonth:${currentStr}`).row();
-
-  for (let i = 1; i <= 4; i++) {
+  for (let i = -3; i <= 3; i++) {
     const d = new Date(current.getFullYear(), current.getMonth() + i, 1);
     const str = formatWeekStart(d);
-    kb.text(getMonthLabel(str), `planmonth:${str}`).row();
+    const label =
+      i === 0 ? `🗓️ Поточний місяць (${getMonthLabel(str)})` : getMonthLabel(str);
+    kb.text(label, `planmonth:${str}`).row();
   }
 
   kb.text("⬅️ Назад", "planperiodback");
