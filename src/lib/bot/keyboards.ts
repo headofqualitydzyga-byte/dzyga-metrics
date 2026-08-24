@@ -3,6 +3,7 @@ import {
   getWeekLabel,
   getMonthLabel,
   getPreviousWeekStart,
+  getCurrentWeekStart,
   getCurrentMonthStart,
   formatWeekStart,
 } from "@/lib/metrics/status";
@@ -98,6 +99,45 @@ export function planBooleanKeyboard(metricId: string): InlineKeyboard {
   return new InlineKeyboard()
     .text("✅ Так", `planbool:${metricId}:100`)
     .text("❌ Ні", `planbool:${metricId}:0`);
+}
+
+// Plan values are forward-looking targets, so unlike weekPickerKeyboard
+// (which starts from the last completed week) this steps forward from the
+// current week — lets the plan-setter get ahead and set next week's (or a
+// few weeks out) plan value in advance.
+export function planWeekPickerKeyboard(): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const current = getCurrentWeekStart();
+  const currentStr = formatWeekStart(current);
+
+  kb.text(`📅 Поточний тиждень (${getWeekLabel(currentStr)})`, `planweek:${currentStr}`).row();
+
+  for (let i = 1; i <= 4; i++) {
+    const d = new Date(current);
+    d.setDate(d.getDate() + i * 7);
+    const str = formatWeekStart(d);
+    kb.text(getWeekLabel(str), `planweek:${str}`).row();
+  }
+
+  kb.text("⬅️ Назад", "planperiodback");
+  return kb;
+}
+
+export function planMonthPickerKeyboard(): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const current = getCurrentMonthStart();
+  const currentStr = formatWeekStart(current);
+
+  kb.text(`🗓️ Поточний місяць (${getMonthLabel(currentStr)})`, `planmonth:${currentStr}`).row();
+
+  for (let i = 1; i <= 4; i++) {
+    const d = new Date(current.getFullYear(), current.getMonth() + i, 1);
+    const str = formatWeekStart(d);
+    kb.text(getMonthLabel(str), `planmonth:${str}`).row();
+  }
+
+  kb.text("⬅️ Назад", "planperiodback");
+  return kb;
 }
 
 export function planMetricPickerKeyboard(

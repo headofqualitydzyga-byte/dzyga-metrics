@@ -21,6 +21,8 @@ import {
   planFrequencyPickerKeyboard,
   planBooleanKeyboard,
   planMetricPickerKeyboard,
+  planWeekPickerKeyboard,
+  planMonthPickerKeyboard,
 } from "./keyboards";
 import type { BusinessLine, MetricDefinition } from "@/types/database";
 
@@ -57,6 +59,10 @@ interface SubmitSession {
   planMetrics?: MetricDefinition[];
   planValues?: Record<string, number>;
   planAwaiting?: string | null;
+  // Overrides the default "current period" staleness check in
+  // showPlanPicker when the plan-setter explicitly picks a different week/
+  // month via the "Обрати інший період" button. Unset = current period.
+  planPeriodStart?: string;
 }
 
 type MyContext = Context & SessionFlavor<SubmitSession>;
@@ -304,6 +310,7 @@ export function createBot(token: string) {
     ctx.session.planAllMetrics = metrics;
     ctx.session.planValues = {};
     ctx.session.planAwaiting = null;
+    ctx.session.planPeriodStart = undefined;
 
     const weekly = metrics.filter((m) => m.frequency === "weekly");
     const monthly = metrics.filter((m) => m.frequency === "monthly");
@@ -327,6 +334,37 @@ export function createBot(token: string) {
     ctx.session.planMetrics = (ctx.session.planAllMetrics ?? []).filter(
       (m) => m.frequency === frequency
     );
+    await ctx.answerCallbackQuery();
+    await showPlanPicker(ctx, { edit: true });
+  });
+
+  // Plan-setter wants to set a plan value for a different week/month than
+  // the current one (e.g. get ahead and fill in next week's target early).
+  bot.callbackQuery("planperiodpicker", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const frequency = ctx.session.planFrequency ?? "weekly";
+    const text =
+      frequency === "monthly"
+        ? "🗓️ За який місяць вносимо планові значення?"
+        : "📅 За який тиждень вносимо планові значення?";
+    const kb = frequency === "monthly" ? planMonthPickerKeyboard() : planWeekPickerKeyboard();
+    await ctx.editMessageText(text, { reply_markup: kb });
+  });
+
+  bot.callbackQuery(/^planweek:(.+)$/, async (ctx) => {
+    ctx.session.planPeriodStart = ctx.match[1];
+    await ctx.answerCallbackQuery();
+    await showPlanPicker(ctx, { edit: true });
+  });
+
+  bot.callbackQuery(/^planmonth:(.+)$/, async (ctx) => {
+    ctx.session.planPeriodStart = ctx.match[1];
+    await ctx.answerCallbackQuery();
+    await showPlanPicker(ctx, { edit: true });
+  });
+
+  // Returned from the period picker without changing the period
+  bot.callbackQuery("planperiodback", async (ctx) => {
     await ctx.answerCallbackQuery();
     await showPlanPicker(ctx, { edit: true });
   });
@@ -716,8 +754,11 @@ async function showPlanPicker(ctx: MyContext, opts: { edit: boolean }) {
   const metrics = ctx.session.planMetrics ?? [];
   const frequency = ctx.session.planFrequency ?? "weekly";
   const values = ctx.session.planValues ?? {};
-  const periodStart =
-    frequency === "monthly" ? getCurrentMonthStart() : getCurrentWeekStart();
+  const periodStart = ctx.session.planPeriodStart
+    ? new Date(ctx.session.planPeriodStart)
+    : frequency === "monthly"
+      ? getCurrentMonthStart()
+      : getCurrentWeekStart();
 
   const answeredIds = new Set(
     metrics
@@ -734,7 +775,10 @@ async function showPlanPicker(ctx: MyContext, opts: { edit: boolean }) {
     `${periodIcon} планові значення\n\n` +
     `Оберіть метрику, щоб внести планове значення (${answeredIds.size}/${metrics.length} оновлено):`;
 
-  const kb = planMetricPickerKeyboard(metrics, answeredIds);
+  const kb = planMetricPickerKeyboard(metrics, answeredIds).row().text(
+    "📆 Обрати інший період",
+    "planperiodpicker"
+  );
 
   if (opts.edit) {
     await ctx.editMessageText(text, { reply_markup: kb });
