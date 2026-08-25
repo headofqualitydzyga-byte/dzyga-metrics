@@ -12,7 +12,6 @@ import {
   formatWeekStart,
 } from "@/lib/metrics/status";
 import MetricChart from "./MetricChart";
-import MetricComparisonChart from "./MetricComparisonChart";
 import WeekSelector from "./WeekSelector";
 import MonthSelector from "./MonthSelector";
 import DeptIcon from "@/components/DeptIcon";
@@ -108,16 +107,6 @@ export default function DepartmentDashboard({
   }
 
   const selectedMetrics = metrics.filter((m) => selectedMetricIds.has(m.id));
-  const singleSelected = selectedMetrics.length === 1 ? selectedMetrics[0] : null;
-  const singleSelectedSubs = chartSubmissions.filter(
-    (s) => s.metric_definition_id === singleSelected?.id
-  );
-  const singleSelectedStatus = singleSelected
-    ? calcStatus(
-        singleSelected,
-        weekSubmissions.find((s) => s.metric_definition_id === singleSelected.id)?.value ?? null
-      )
-    : "not_submitted";
 
   async function handleWebSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -356,38 +345,30 @@ export default function DepartmentDashboard({
         )}
       </div>
 
-      {/* Chart — a single ✓ shows that metric's plan/range reference lines
-          as before; ticking more than one switches to an overlay comparing
-          just their actual values (a shared plan line wouldn't mean
-          anything across metrics with different plans/units) */}
-      {singleSelected && (
-        <div className="mb-6 rounded-xl border border-border bg-surface p-6">
-          <h2 className="mb-1 text-sm font-semibold text-ink">
-            Динаміка: {singleSelected.name}
-          </h2>
-          <p className="mb-4 text-xs text-muted">
-            {periodLabel} · {singleSelected.unit}
-          </p>
-          <MetricChart
-            metric={singleSelected}
-            submissions={singleSelectedSubs}
-            period={period}
-            status={singleSelectedStatus}
-          />
-        </div>
-      )}
-
-      {selectedMetrics.length > 1 && (
-        <div className="mb-6 rounded-xl border border-border bg-surface p-6">
-          <h2 className="mb-1 text-sm font-semibold text-ink">
-            Динаміка: порівняння ({selectedMetrics.length} метрики)
-          </h2>
-          <p className="mb-4 text-xs text-muted">{periodLabel}</p>
-          <MetricComparisonChart
-            metrics={selectedMetrics}
-            submissions={chartSubmissions}
-            period={period}
-          />
+      {/* Each ticked metric gets its own chart (own axes, own plan/range
+          reference lines) laid out side by side, rather than overlaying
+          them on one shared chart — a shared plan line wouldn't mean
+          anything across metrics with different plans/units. */}
+      {selectedMetrics.length > 0 && (
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {selectedMetrics.map((m) => {
+            const subs = chartSubmissions.filter((s) => s.metric_definition_id === m.id);
+            const status = calcStatus(
+              m,
+              weekSubmissions.find((s) => s.metric_definition_id === m.id)?.value ?? null
+            );
+            return (
+              <div key={m.id} className="rounded-xl border border-border bg-surface p-6">
+                <h2 className="mb-1 text-sm font-semibold text-ink">
+                  Динаміка: {m.name}
+                </h2>
+                <p className="mb-4 text-xs text-muted">
+                  {periodLabel} · {m.unit}
+                </p>
+                <MetricChart metric={m} submissions={subs} period={period} status={status} />
+              </div>
+            );
+          })}
         </div>
       )}
 
