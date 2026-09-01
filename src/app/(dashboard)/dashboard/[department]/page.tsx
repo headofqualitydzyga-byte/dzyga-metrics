@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { requireProfile, canSeeAllDepartments } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   getPreviousWeekStart,
@@ -29,14 +29,6 @@ export default async function DepartmentPage({
   const { profile } = await requireProfile();
   const { department: deptId } = await params;
   const sp = await searchParams;
-
-  if (!canSeeAllDepartments(profile.role)) {
-    if (profile.department_id !== deptId) {
-      redirect(
-        profile.department_id ? `/dashboard/${profile.department_id}` : "/dashboard"
-      );
-    }
-  }
 
   const weekStart = sp.week ?? formatWeekStart(getPreviousWeekStart());
   const monthStart = sp.month ?? formatWeekStart(getCurrentMonthStart());
@@ -74,6 +66,13 @@ export default async function DepartmentPage({
   if (profile.role !== "admin") {
     const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
     defs = filterByAccess(defs, profile.role, accessibleIds);
+  }
+
+  // Manager with zero accessible metrics in this specific department isn't
+  // authorized to view it — send them back to /dashboard to land wherever
+  // they do have access. Admin/viewer can browse any department regardless.
+  if (profile.role === "manager" && defs.length === 0) {
+    redirect("/dashboard");
   }
 
   const hasCatering = defs.some((d) => d.business_line === "catering");
@@ -141,9 +140,8 @@ export default async function DepartmentPage({
         null
       }
       canSubmitWeb={
-        (profile.role === "manager" && profile.department_id === deptId) ||
         profile.role === "admin" ||
-        (profile.role === "viewer" && activeMetrics.length > 0)
+        ((profile.role === "manager" || profile.role === "viewer") && activeMetrics.length > 0)
       }
     />
   );

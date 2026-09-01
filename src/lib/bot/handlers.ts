@@ -11,6 +11,7 @@ import {
   getPeriodLabel,
 } from "@/lib/metrics/status";
 import { getAccessibleMetricIds, filterByAccess } from "@/lib/metrics/access";
+import { disambiguatedMetricLabel, type MetricWithDept } from "@/lib/bot/metric-label";
 import {
   weekPickerKeyboard,
   monthPickerKeyboard,
@@ -54,9 +55,9 @@ interface SubmitSession {
 
   // /planvalues flow (recurring plan-value entry, separate from the above
   // actual-value submission flow — driven by a single designated plan-setter).
-  planAllMetrics?: MetricDefinition[];
+  planAllMetrics?: MetricWithDept[];
   planFrequency?: "weekly" | "monthly";
-  planMetrics?: MetricDefinition[];
+  planMetrics?: MetricWithDept[];
   planValues?: Record<string, number>;
   planAwaiting?: string | null;
   // Overrides the default "current period" staleness check in
@@ -154,7 +155,7 @@ export function createBot(token: string) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, role, department_id")
+      .select("id, role")
       .eq("telegram_id", telegramId)
       .single();
 
@@ -166,7 +167,6 @@ export function createBot(token: string) {
     const { data: metricsRaw } = await supabase
       .from("metric_definitions")
       .select("*")
-      .eq("department_id", profile.department_id)
       .eq("is_active", true)
       .order("sort_order");
 
@@ -238,7 +238,7 @@ export function createBot(token: string) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, role, department_id")
+      .select("id, role")
       .eq("telegram_id", telegramId)
       .single();
 
@@ -250,7 +250,6 @@ export function createBot(token: string) {
     const { data: metricsData } = await supabase
       .from("metric_definitions")
       .select("*")
-      .eq("department_id", profile.department_id)
       .eq("is_active", true)
       .order("sort_order");
 
@@ -296,12 +295,12 @@ export function createBot(token: string) {
     const supabase = createAdminClient() as any;
     const { data: defsRaw } = await supabase
       .from("metric_definitions")
-      .select("*")
+      .select("*, departments(name)")
       .eq("plan_recurring", true)
       .eq("is_active", true)
       .order("sort_order");
 
-    const metrics = (defsRaw ?? []) as MetricDefinition[];
+    const metrics = (defsRaw ?? []) as MetricWithDept[];
     if (!metrics.length) {
       await ctx.reply("Немає метрик з автооновленням планових значень.");
       return;
@@ -378,9 +377,10 @@ export function createBot(token: string) {
       return;
     }
     await ctx.answerCallbackQuery();
+    const label = disambiguatedMetricLabel(metric, ctx.session.planMetrics ?? []);
 
     if (metric.value_type === "boolean") {
-      await ctx.editMessageText(`*${metric.name}*\n\nПланове значення: Так?`, {
+      await ctx.editMessageText(`*${label}*\n\nПланове значення: Так?`, {
         parse_mode: "Markdown",
         reply_markup: planBooleanKeyboard(metric.id),
       });
@@ -388,7 +388,7 @@ export function createBot(token: string) {
       ctx.session.planAwaiting = metricId;
       const current = ctx.session.planValues?.[metricId] ?? metric.plan_value ?? undefined;
       await ctx.editMessageText(
-        `*${metric.name}*\n\nВведіть нове планове значення (${metric.unit})` +
+        `*${label}*\n\nВведіть нове планове значення (${metric.unit})` +
           (current !== undefined ? `\nПоточне: ${current}` : ""),
         { parse_mode: "Markdown" }
       );
@@ -431,7 +431,7 @@ export function createBot(token: string) {
     const metrics = ctx.session.planMetrics ?? [];
     const summary = metrics
       .filter((m) => values[m.id] !== undefined)
-      .map((m) => `• ${m.name}: ${values[m.id]} ${m.unit}`)
+      .map((m) => `• ${disambiguatedMetricLabel(m, metrics)}: ${values[m.id]} ${m.unit}`)
       .join("\n");
 
     await ctx.editMessageText(`✅ *Планові значення оновлено!*\n\n${summary}`, {
@@ -651,9 +651,8 @@ export function createBot(token: string) {
 
       const value = parseFloat(ctx.message.text.replace(",", "."));
       if (isNaN(value)) {
-        await ctx.reply(
-          `Введіть числове значення для "${metric.name}" (${metric.unit}):`
-        );
+        const label = disambiguatedMetricLabel(metric, ctx.session.planMetrics ?? []);
+        await ctx.reply(`Введіть числове значення для "${label}" (${metric.unit}):`);
         return;
       }
 

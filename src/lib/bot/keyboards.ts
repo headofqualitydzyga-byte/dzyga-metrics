@@ -8,6 +8,7 @@ import {
   formatWeekStart,
 } from "@/lib/metrics/status";
 import type { MetricDefinition } from "@/types/database";
+import { disambiguatedMetricLabel, type MetricWithDept } from "./metric-label";
 
 // Starts from the last completed week (metrics are reported for the week
 // that just ended, not the in-progress current one).
@@ -138,13 +139,13 @@ export function planMonthPickerKeyboard(): InlineKeyboard {
 }
 
 export function planMetricPickerKeyboard(
-  metrics: MetricDefinition[],
+  metrics: MetricWithDept[],
   answeredIds: Set<string>
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
   for (const m of metrics) {
     const icon = answeredIds.has(m.id) ? "✅" : "⬜";
-    kb.text(`${icon} ${m.name}`, `planpick:${m.id}`).row();
+    kb.text(`${icon} ${disambiguatedMetricLabel(m, metrics)}`, `planpick:${m.id}`).row();
   }
   if (answeredIds.size > 0) {
     kb.text("💾 Зберегти", "planconfirm").row();

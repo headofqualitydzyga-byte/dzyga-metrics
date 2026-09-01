@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: managersRaw } = await (supabase as any)
     .from("profiles")
-    .select("id, telegram_id, full_name, department_id")
+    .select("id, telegram_id, full_name")
     .eq("role", "manager")
     .not("telegram_id", "is", null);
 
@@ -56,7 +56,6 @@ export async function GET(req: Request) {
     id: string;
     telegram_id: string | null;
     full_name: string | null;
-    department_id: string | null;
   }> | null;
 
   if (!managers?.length) {
@@ -82,9 +81,8 @@ export async function GET(req: Request) {
   let notifiedMonthly = 0;
 
   for (const manager of managers) {
-    const deptDefs = allDefs.filter((d) => d.department_id === manager.department_id);
     const accessibleIds = await getAccessibleMetricIds(supabase, manager.id);
-    const accessible = filterByAccess(deptDefs, "manager", accessibleIds);
+    const accessible = filterByAccess(allDefs, "manager", accessibleIds);
 
     const hasWeekly = accessible.some((d) => d.frequency === "weekly");
     const hasMonthly = accessible.some((d) => d.frequency === "monthly");

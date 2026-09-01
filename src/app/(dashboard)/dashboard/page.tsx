@@ -23,21 +23,6 @@ export default async function DashboardPage({
   const { profile } = await requireProfile();
   const params = await searchParams;
 
-  // Managers see only their own department
-  if (!canSeeAllDepartments(profile.role)) {
-    if (profile.department_id) {
-      redirect(`/dashboard/${profile.department_id}`);
-    } else {
-      return (
-        <div className="flex h-64 items-center justify-center">
-          <p className="text-sm text-muted">
-            Ваш профіль ще не прив'язаний до відділу. Зверніться до адміністратора.
-          </p>
-        </div>
-      );
-    }
-  }
-
   const weekStart = params.week ?? formatWeekStart(getPreviousWeekStart());
   const monthStart = params.month ?? formatWeekStart(getCurrentMonthStart());
   const view: "weekly" | "monthly" = params.view === "monthly" ? "monthly" : "weekly";
@@ -54,12 +39,34 @@ export default async function DashboardPage({
       .order("sort_order"),
   ]);
 
-  const depts = (departments ?? []) as Department[];
+  let depts = (departments ?? []) as Department[];
   let defs = (metrics ?? []) as MetricDefinition[];
 
   if (profile.role !== "admin") {
     const accessibleIds = await getAccessibleMetricIds(supabase, profile.id);
     defs = filterByAccess(defs, profile.role, accessibleIds);
+  }
+
+  // Managers only ever see departments where they have at least one
+  // accessible metric (granted via /admin/employees "Метрики", not tied to
+  // their profile's single department_id) — straight to it when that's
+  // exactly one department, otherwise the same multi-department grid
+  // admin/viewer get below, just scoped down to their departments.
+  if (!canSeeAllDepartments(profile.role)) {
+    const accessibleDeptIds = new Set(defs.map((d) => d.department_id));
+    if (accessibleDeptIds.size === 0) {
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <p className="text-sm text-muted">
+            Вам ще не призначено жодної метрики. Зверніться до адміністратора.
+          </p>
+        </div>
+      );
+    }
+    if (accessibleDeptIds.size === 1) {
+      redirect(`/dashboard/${[...accessibleDeptIds][0]}`);
+    }
+    depts = depts.filter((d) => accessibleDeptIds.has(d.id));
   }
 
   const hasCatering = defs.some((d) => d.business_line === "catering");
