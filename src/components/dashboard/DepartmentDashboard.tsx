@@ -350,7 +350,7 @@ export default function DepartmentDashboard({
           them on one shared chart — a shared plan line wouldn't mean
           anything across metrics with different plans/units. */}
       {selectedMetrics.length > 0 && (
-        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {selectedMetrics.map((m) => {
             const subs = chartSubmissions.filter((s) => s.metric_definition_id === m.id);
             const status = calcStatus(
@@ -358,14 +358,14 @@ export default function DepartmentDashboard({
               weekSubmissions.find((s) => s.metric_definition_id === m.id)?.value ?? null
             );
             return (
-              <div key={m.id} className="rounded-xl border border-border bg-surface p-6">
-                <h2 className="mb-1 text-sm font-semibold text-ink">
-                  Динаміка: {m.name}
+              <div key={m.id} className="rounded-xl border border-border bg-surface p-4">
+                <h2 className="mb-1 truncate text-sm font-semibold text-ink" title={m.name}>
+                  {m.name}
                 </h2>
-                <p className="mb-4 text-xs text-muted">
+                <p className="mb-2 text-xs text-muted">
                   {periodLabel} · {m.unit}
                 </p>
-                <MetricChart metric={m} submissions={subs} period={period} status={status} />
+                <MetricChart metric={m} submissions={subs} period={period} status={status} height={160} />
               </div>
             );
           })}

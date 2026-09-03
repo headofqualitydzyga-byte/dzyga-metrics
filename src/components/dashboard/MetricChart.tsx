@@ -29,11 +29,13 @@ export default function MetricChart({
   submissions,
   period,
   status,
+  height = 240,
 }: {
   metric: MetricDefinition;
   submissions: MetricSubmission[];
   period: "week" | "month" | "quarter";
   status: MetricStatus;
+  height?: number;
 }) {
   const gradientId = `chart-${useId().replace(/:/g, "")}`;
   const weeksBack = period === "week" ? 8 : period === "month" ? 16 : 24;
@@ -64,7 +66,7 @@ export default function MetricChart({
   const factColor = STATUS_COLOR[status];
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
